@@ -2,13 +2,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import Swiper from 'https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.mjs';
 
 // Global State & Config
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'furiozos-app';
 let firebaseConfig;
 try {
     firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-        // Dummy config fallback, will fail without real environment but structure is correct
         apiKey: "mock-api-key", projectId: "mock-project", appId: "mock-app"
     };
 } catch (e) { console.error("Error parsing firebase config", e); }
@@ -21,7 +21,6 @@ let currentUser = null;
 let cart = [];
 let isAuthLoading = true;
 
-// Mock Product Data
 const PRODUCTS = [
     { id: 'p1', name: 'Caneca FurioZOs', price: 45.00, img: 'https://placehold.co/400x400/1F4229/8A9A4A?text=Caneca+Oficial', hasSize: false, desc: 'Caneca oficial da atlética, 500ml de pura energia da ZO. Perfeita para as choppadas.' },
     { id: 'p2', name: 'Camisa Especial Limitada', price: 120.00, img: 'https://placehold.co/400x400/8A9A4A/1F4229?text=Camisa+Diretoria', hasSize: true, desc: 'Edição limitada "Sapo Bombado". Tecido premium dry-fit, detalhes em dourado e verde oliva.' },
@@ -33,7 +32,6 @@ const PRODUCTS = [
 let selectedProduct = null;
 let selectedSize = null;
 
-// DOM Elements
 const grid = document.getElementById('product-grid');
 const modalBackdrop = document.getElementById('modal-backdrop');
 const productModal = document.getElementById('product-modal');
@@ -42,14 +40,12 @@ const cartSidebar = document.getElementById('cart-sidebar');
 const authModal = document.getElementById('auth-modal');
 const authModalContent = document.getElementById('auth-modal-content');
 
-// Cart UI
 const cartBadge = document.getElementById('cart-badge');
 const cartBadgeMobile = document.getElementById('cart-badge-mobile');
 const cartItemsContainer = document.getElementById('cart-items-container');
 const cartTotalEl = document.getElementById('cart-total');
 const emptyCartMsg = document.getElementById('empty-cart-msg');
 
-// Utils
 const formatPrice = (price) => `R$ ${price.toFixed(2).replace('.', ',')}`;
 const showToast = (message, type = 'success') => {
     const toast = document.createElement('div');
@@ -59,7 +55,6 @@ const showToast = (message, type = 'success') => {
     setTimeout(() => toast.remove(), 3000);
 };
 
-// Render Products
 function renderProducts() {
     grid.innerHTML = PRODUCTS.map(p => `
         <div class="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col border border-gray-100">
@@ -79,7 +74,6 @@ function renderProducts() {
     `).join('');
 }
 
-// Initialize Auth
 async function initAuth() {
     try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -108,7 +102,6 @@ onAuthStateChanged(auth, async (user) => {
 
 initAuth();
 
-// Cart Logic
 async function loadCartFromFirestore() {
     if (!currentUser) return;
     try {
@@ -242,7 +235,6 @@ function updateCartUI() {
     cartTotalEl.textContent = formatPrice(totalValue);
 }
 
-// Checkout
 document.getElementById('btn-checkout').addEventListener('click', async () => {
     if (cart.length === 0) return;
     
@@ -276,7 +268,6 @@ document.getElementById('btn-checkout').addEventListener('click', async () => {
     }
 });
 
-// Modals Setup
 window.openProductModal = function(id) {
     selectedProduct = PRODUCTS.find(p => p.id === id);
     if (!selectedProduct) return;
@@ -294,8 +285,12 @@ window.openProductModal = function(id) {
     
     if (selectedProduct.hasSize) {
         sizeContainer.classList.remove('hidden');
-        sizeOptions.innerHTML = ['P', 'M', 'G', 'GG'].map(size => `
-            <button onclick="window.selectSize('${size}', this)" class="size-btn w-10 h-10 rounded-full border-2 border-gray-300 font-bold text-gray-600 hover:border-furiozo-light hover:text-furiozo-dark transition-all focus:outline-none">
+        
+        // Novos tamanhos completos inseridos aqui
+        const tamanhos = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+        
+        sizeOptions.innerHTML = tamanhos.map(size => `
+            <button onclick="window.selectSize('${size}', this)" class="size-btn px-3 min-w-[2.5rem] h-10 rounded-full border-2 border-gray-300 font-bold text-gray-600 hover:border-furiozo-light hover:text-furiozo-dark transition-all focus:outline-none flex items-center justify-center">
                 ${size}
             </button>
         `).join('');
@@ -328,7 +323,6 @@ document.getElementById('qty-minus').addEventListener('click', () => {
 
 document.getElementById('btn-add-to-cart').addEventListener('click', window.addToCart);
 
-// Sidebar Handling
 function openCartSidebar() {
     modalBackdrop.classList.remove('hidden');
     setTimeout(() => {
@@ -388,7 +382,6 @@ modalBackdrop.addEventListener('click', () => {
     closeCartSidebar();
 });
 
-// Auth Flow Setup
 let authMode = 'login';
 const authForm = document.getElementById('auth-form');
 const authError = document.getElementById('auth-error');
@@ -512,28 +505,24 @@ const handleLogout = async () => {
 document.getElementById('btn-logout').addEventListener('click', handleLogout);
 document.getElementById('btn-logout-mobile').addEventListener('click', handleLogout);
 
-// Carousel Setup
-const carousel = document.getElementById('carousel');
-let currentSlide = 0;
-const totalSlides = 2;
-
-function goToSlide(index) {
-    currentSlide = (index + totalSlides) % totalSlides;
-    carousel.style.transform = `translateX(-${currentSlide * 100}%)`;
-}
-
-document.getElementById('next-slide').addEventListener('click', () => goToSlide(currentSlide + 1));
-document.getElementById('prev-slide').addEventListener('click', () => goToSlide(currentSlide - 1));
-
-setInterval(() => {
-    goToSlide(currentSlide + 1);
-}, 5000);
+// SWIPER SETUP
+const swiper = new Swiper('.mySwiper', {
+    loop: true,
+    grabCursor: true,
+    autoplay: {
+        delay: 5000,
+        disableOnInteraction: false,
+    },
+    navigation: {
+        nextEl: '#next-slide',
+        prevEl: '#prev-slide',
+    },
+});
 
 document.getElementById('mobile-menu-btn').addEventListener('click', () => {
     const menu = document.getElementById('mobile-menu');
     menu.classList.toggle('hidden');
 });
 
-// Initialization
 renderProducts();
 updateCartUI();
