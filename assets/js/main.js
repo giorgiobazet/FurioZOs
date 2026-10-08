@@ -20,13 +20,27 @@ const auth = getAuth(app);
 let currentUser = null;
 let cart = [];
 let isAuthLoading = true;
+let modalSwiperInstance = null;
 
+// Produtos com a nova estrutura de múltiplas imagens
 const PRODUCTS = [
-    { id: 'p1', name: 'Caneca FurioZOs', price: 45.00, img: 'https://placehold.co/400x400/1F4229/8A9A4A?text=Caneca+Oficial', hasSize: false, desc: 'Caneca oficial da atlética, 500ml de pura energia da ZO. Perfeita para as choppadas.' },
-    { id: 'p2', name: 'Camisa Especial Limitada', price: 120.00, img: 'https://placehold.co/400x400/8A9A4A/1F4229?text=Camisa+Diretoria', hasSize: true, desc: 'Edição limitada "Sapo Bombado". Tecido premium dry-fit, detalhes em dourado e verde oliva.' },
-    { id: 'p3', name: 'Camisa de Jogo', price: 85.00, img: 'https://placehold.co/400x400/1F4229/FFFFFF?text=Camisa+de+Jogo', hasSize: true, desc: 'Camisa oficial para atletas e guerreiros. Material leve, ideal para a prática esportiva.' },
-    { id: 'p4', name: 'Camisa de Torcida', price: 70.00, img: 'https://placehold.co/400x400/E5F0D8/1F4229?text=Camisa+Torcida', hasSize: true, desc: 'Mostre seu apoio nas arquibancadas! Malha 100% algodão, confortável e com estampa exclusiva.' },
-    { id: 'p5', name: 'Bandana FurioZOs', price: 25.00, img: 'https://placehold.co/400x400/1F4229/8A9A4A?text=Bandana', hasSize: false, desc: 'Acessório indispensável. Use na cabeça, no pescoço ou amarrada na mochila. Estilo puramente ZO.' },
+    { id: 'p1', name: 'Caneca FurioZOs', price: 45.00, images: ['https://placehold.co/400x400/1F4229/8A9A4A?text=Caneca+Oficial'], hasSize: false, desc: 'Caneca oficial da atlética, 500ml de pura energia da ZO. Perfeita para as choppadas.' },
+    { 
+        id: 'p2', 
+        name: 'Camisa Especial Limitada', 
+        price: 120.00, 
+        images: [
+            'assets/img/camisa-diretoria-frente.jpg', 
+            'assets/img/camisa-diretoria-costas.jpg', 
+            'assets/img/camisa-diretoria-manga.jpg',
+            'assets/img/camisa-diretoria-escudo.jpg' // Nova foto do escudo
+        ], 
+        hasSize: true, 
+        desc: 'Edição limitada "Sapo Bombado". Tecido premium dry-fit, detalhes em dourado e verde oliva.' 
+    },
+    { id: 'p3', name: 'Camisa de Jogo', price: 85.00, images: ['https://placehold.co/400x400/1F4229/FFFFFF?text=Camisa+de+Jogo'], hasSize: true, desc: 'Camisa oficial para atletas e guerreiros. Material leve, ideal para a prática esportiva.' },
+    { id: 'p4', name: 'Camisa de Torcida', price: 70.00, images: ['https://placehold.co/400x400/E5F0D8/1F4229?text=Camisa+Torcida'], hasSize: true, desc: 'Mostre seu apoio nas arquibancadas! Malha 100% algodão, confortável e com estampa exclusiva.' },
+    { id: 'p5', name: 'Bandana FurioZOs', price: 25.00, images: ['https://placehold.co/400x400/1F4229/8A9A4A?text=Bandana'], hasSize: false, desc: 'Acessório indispensável. Use na cabeça, no pescoço ou amarrada na mochila. Estilo puramente ZO.' },
 ];
 
 let selectedProduct = null;
@@ -59,7 +73,7 @@ function renderProducts() {
     grid.innerHTML = PRODUCTS.map(p => `
         <div class="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col border border-gray-100">
             <div class="relative pb-[100%] cursor-pointer group" onclick="window.openProductModal('${p.id}')">
-                <img src="${p.img}" alt="${p.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                <img src="${p.images[0]}" alt="${p.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
             </div>
             <div class="p-5 flex flex-col flex-grow">
                 <h3 class="font-sport text-lg text-furiozo-dark uppercase mb-1 flex-grow cursor-pointer hover:text-furiozo-light transition-colors" onclick="window.openProductModal('${p.id}')">${p.name}</h3>
@@ -143,7 +157,7 @@ window.addToCart = async function() {
         id: selectedProduct.id,
         name: selectedProduct.name,
         price: selectedProduct.price,
-        img: selectedProduct.img,
+        img: selectedProduct.images[0], // Salva a foto principal no carrinho
         size: selectedSize || 'Único',
         quantity: qty,
         cartItemId: `${selectedProduct.id}-${selectedSize || 'unico'}`
@@ -273,12 +287,36 @@ window.openProductModal = function(id) {
     if (!selectedProduct) return;
 
     selectedSize = null;
-    document.getElementById('modal-product-img').src = selectedProduct.img;
     document.getElementById('modal-product-name').textContent = selectedProduct.name;
     document.getElementById('modal-product-price').textContent = formatPrice(selectedProduct.price);
     document.getElementById('modal-product-desc').textContent = selectedProduct.desc;
     document.getElementById('qty-input').value = 1;
     document.getElementById('size-error').classList.add('hidden');
+
+    // Montando a galeria de imagens dinamicamente
+    const wrapper = document.getElementById('modal-swiper-wrapper');
+    wrapper.innerHTML = selectedProduct.images.map(imgUrl => `
+        <div class="swiper-slide flex items-center justify-center p-4">
+            <img src="${imgUrl}" alt="${selectedProduct.name}" class="max-w-full max-h-[300px] md:max-h-[400px] object-contain drop-shadow-md">
+        </div>
+    `).join('');
+
+    // Destrói o carrossel anterior e recria
+    if (modalSwiperInstance) {
+        modalSwiperInstance.destroy(true, true);
+    }
+    modalSwiperInstance = new Swiper('.modalSwiper', {
+        loop: selectedProduct.images.length > 1,
+        grabCursor: true,
+        pagination: {
+            el: ".swiper-pagination",
+            clickable: true,
+        },
+        navigation: {
+            nextEl: ".swiper-button-next",
+            prevEl: ".swiper-button-prev",
+        },
+    });
 
     const sizeContainer = document.getElementById('size-selector-container');
     const sizeOptions = document.getElementById('size-options');
@@ -286,7 +324,6 @@ window.openProductModal = function(id) {
     if (selectedProduct.hasSize) {
         sizeContainer.classList.remove('hidden');
         
-        // Novos tamanhos completos inseridos aqui
         const tamanhos = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
         
         sizeOptions.innerHTML = tamanhos.map(size => `
@@ -505,8 +542,8 @@ const handleLogout = async () => {
 document.getElementById('btn-logout').addEventListener('click', handleLogout);
 document.getElementById('btn-logout-mobile').addEventListener('click', handleLogout);
 
-// SWIPER SETUP
-const swiper = new Swiper('.mySwiper', {
+// SWIPER DO BANNER PRINCIPAL
+const swiperMain = new Swiper('.mySwiper', {
     loop: true,
     grabCursor: true,
     autoplay: {
