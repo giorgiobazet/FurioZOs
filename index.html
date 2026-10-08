@@ -165,9 +165,7 @@
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                     <div class="text-left">
                         <h2 class="text-3xl md:text-5xl font-sport font-black text-furiozo-dark uppercase mb-4 tracking-tight">A Nossa <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#8A9A4A] to-green-600">História</span></h2>
-                        
                         <div class="h-2 w-32 bg-stripes mb-8 rounded shadow-sm"></div>
-                        
                         <div class="text-gray-800 text-lg leading-relaxed space-y-6 font-medium">
                             <p>A <strong class="text-furiozo-dark font-black">Atlética FurioZOs</strong> nasceu da paixão, da garra e da necessidade de representar os alunos do nosso campus. O <strong class="text-furiozo-dark text-xl font-black">ZO</strong> maiúsculo em nosso nome é o maior símbolo do nosso orgulho e de nossas raízes na Zona Oeste (UERJ-ZO).</p>
                             <p>Somos guiados pelo nosso mascote, o <strong class="text-furiozo-dark font-black">Sapo</strong>, que reflete nossa força, nossa musculatura construída com muito suor, resiliência e a fúria com que entramos em quadra e participamos de todos os eventos.</p>
@@ -176,7 +174,6 @@
                             </p>
                         </div>
                     </div>
-                    
                     <div class="relative flex justify-center lg:justify-end mt-10 lg:mt-0">
                         <div class="absolute inset-0 bg-[#ccff00]/20 rounded-2xl transform rotate-3 scale-105 z-0"></div>
                         <img src="assets/img/historia.jpg" alt="História FurioZOs" class="rounded-2xl shadow-2xl object-cover w-full max-w-md relative z-10 hover:scale-[1.02] transition-transform duration-500 border-4 border-white">
@@ -189,17 +186,16 @@
         <section id="gestao" class="relative py-32 mt-[-4rem] mb-16 bg-furiozo-dark bg-dryfit border-y-[6px] border-[#ccff00] transform -skew-y-3 shadow-[0_20px_50px_rgba(31,66,41,0.5)] z-20">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 transform skew-y-3">
                 <h2 class="text-4xl md:text-5xl font-sport font-black text-white uppercase mb-4 tracking-tight">Atual <span class="text-[#ccff00] drop-shadow-[0_0_10px_rgba(204,255,0,0.3)]">Gestão</span></h2>
-                
                 <div class="h-2 w-32 bg-stripes-neon mx-auto mb-10 rounded shadow-[0_0_10px_rgba(204,255,0,0.5)]"></div>
-                
                 <p class="text-gray-300 mb-16 text-lg max-w-2xl mx-auto">Conheça a diretoria que faz a FurioZOs acontecer todos os dias.</p>
-                
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                    <!-- Cards Gestão -->
                     <div class="bg-white p-6 rounded-3xl shadow-xl hover:shadow-[0_10px_25px_rgba(204,255,0,0.3)] hover:-translate-y-2 transition-all duration-300 border-b-[6px] border-[#ccff00] group">
                         <div class="text-6xl mb-4 drop-shadow-sm animate-float group-hover:scale-110 transition-transform">🐸</div>
                         <h3 class="font-sport text-xl text-furiozo-dark font-black">Nome</h3>
                         <p class="text-[#8A9A4A] font-black text-sm uppercase tracking-wider mt-1">Presidente</p>
                     </div>
+                    <!-- Mais cards omitidos aqui visualmente no pensamento, mas presentes no html -->
                     <div class="bg-white p-6 rounded-3xl shadow-xl hover:shadow-[0_10px_25px_rgba(204,255,0,0.3)] hover:-translate-y-2 transition-all duration-300 border-b-[6px] border-[#ccff00] group">
                         <div class="text-6xl mb-4 drop-shadow-sm animate-float group-hover:scale-110 transition-transform" style="animation-delay: 0.2s">🐸</div>
                         <h3 class="font-sport text-xl text-furiozo-dark font-black">Nome</h3>
@@ -232,15 +228,12 @@
                     <div class="h-2 w-32 bg-stripes mx-auto mt-4 rounded"></div>
                     <p class="mt-4 text-gray-600 text-lg font-medium">Adquira os produtos oficiais e ajude nossa atlética a crescer!</p>
                 </div>
-
                 <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                    <!-- Cards inseridos pelo JS -->
                 </div>
             </div>
         </section>
     </main>
 
-    <!-- Footer -->
     <footer class="bg-furiozo-dark text-white py-12 border-t-[6px] border-[#ccff00] relative">
         <div class="max-w-7xl mx-auto px-4 text-center relative z-10">
             <h3 class="font-sport text-3xl mb-4 tracking-wider">Atlética <span class="text-[#ccff00]">FurioZOs</span></h3>
@@ -253,19 +246,15 @@
         </div>
     </footer>
 
-    <!-- ========================================== -->
-    <!-- MODALS E CARRINHO (Z-INDEX AJUSTADO)       -->
-    <!-- ========================================== -->
+    <!-- MODALS E CARRINHO (AQUI ESTÁ A CORREÇÃO DE VELOCIDADE: duration-150 ease-out ao invés de duration-300) -->
     <div id="toast-container"></div>
-    <div id="modal-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300"></div>
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-150 ease-out"></div>
 
-    <!-- Product Modal com rolagem interna no mobile e botão Fixo na tela -->
+    <!-- Product Modal -->
     <div id="product-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
-        
-        <!-- BOTÃO MOBILE FIXO NA TELA (Fora do card que rola para nunca sumir) -->
         <button id="close-product-mobile" class="md:hidden absolute top-4 right-4 text-gray-800 bg-white shadow-2xl border-2 border-gray-200 rounded-full w-12 h-12 flex items-center justify-center text-xl z-[150] active:scale-95 transition-transform"><i class="fa-solid fa-times"></i></button>
 
-        <div class="bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] border-4 border-[#ccff00] max-w-4xl w-full max-h-[90vh] overflow-y-auto md:overflow-hidden flex flex-col md:flex-row transform scale-95 opacity-0 transition-all duration-300 relative" id="product-modal-content">
+        <div class="bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] border-4 border-[#ccff00] max-w-4xl w-full max-h-[90vh] overflow-y-auto md:overflow-hidden flex flex-col md:flex-row transform scale-95 opacity-0 transition-all duration-150 ease-out relative" id="product-modal-content">
             
             <div class="md:w-1/2 bg-gray-50 flex items-center justify-center relative p-0 border-b md:border-b-0 md:border-r border-gray-200 shrink-0">
                 <div class="swiper modalSwiper w-full h-[300px] md:h-full md:min-h-[450px]">
@@ -309,7 +298,7 @@
     </div>
 
     <!-- Cart Sidebar -->
-    <div id="cart-sidebar" class="fixed inset-y-0 right-0 z-[100] w-full md:w-[400px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.2)] transform translate-x-full transition-transform duration-300 flex flex-col border-l-[6px] border-[#ccff00]">
+    <div id="cart-sidebar" class="fixed inset-y-0 right-0 z-[100] w-full md:w-[400px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.2)] transform translate-x-full transition-transform duration-200 ease-out flex flex-col border-l-[6px] border-[#ccff00]">
         <div class="p-6 bg-furiozo-dark text-white flex justify-between items-center border-b border-white/10">
             <h2 class="font-sport text-xl font-black uppercase text-[#ccff00]"><i class="fa-solid fa-shopping-cart mr-2"></i> Seu Carrinho</h2>
             <button id="close-cart" class="text-white hover:text-[#ccff00] text-xl transition-colors"><i class="fa-solid fa-times"></i></button>
@@ -336,7 +325,7 @@
 
     <!-- Auth Modal -->
     <div id="auth-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 opacity-0 transition-all duration-300 border-4 border-[#ccff00]" id="auth-modal-content">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 opacity-0 transition-all duration-150 ease-out border-4 border-[#ccff00]" id="auth-modal-content">
             <div class="bg-furiozo-dark p-6 flex justify-between items-center relative overflow-hidden">
                 <h2 class="font-sport text-xl font-black text-[#ccff00] uppercase tracking-wide relative z-10" id="auth-title">Acessar Conta</h2>
                 <button id="close-auth" class="text-white hover:text-[#ccff00] text-xl transition-colors relative z-10"><i class="fa-solid fa-times"></i></button>
@@ -368,7 +357,7 @@
         </div>
     </div>
 
-    <!-- Script garantido no fundo da página -->
+    <!-- Script de Inicialização -->
     <script type="module" src="assets/js/main.js"></script>
 </body>
 </html>
