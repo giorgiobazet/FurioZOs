@@ -4,7 +4,6 @@ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
 import { getFirestore, doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import Swiper from 'https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.mjs';
 
-// Global State & Config
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'furiozos-app';
 let firebaseConfig;
 try {
@@ -22,9 +21,8 @@ let cart = [];
 let isAuthLoading = true;
 let modalSwiperInstance = null;
 
-// Produtos com a nova estrutura de múltiplas imagens
 const PRODUCTS = [
-    { id: 'p1', name: 'Caneca FurioZOs', price: 45.00, images: ['https://placehold.co/400x400/1F4229/8A9A4A?text=Caneca+Oficial'], hasSize: false, desc: 'Caneca oficial da atlética, 500ml de pura energia da ZO. Perfeita para as choppadas.' },
+    { id: 'p1', name: 'Caneca FurioZOs', price: 45.00, images: ['assets/img/caneca.jpg'], hasSize: false, desc: 'Caneca oficial da atlética, 500ml de pura energia da ZO. Perfeita para as choppadas.' },
     { 
         id: 'p2', 
         name: 'Camisa Especial Limitada', 
@@ -33,14 +31,14 @@ const PRODUCTS = [
             'assets/img/camisa-diretoria-frente.jpg', 
             'assets/img/camisa-diretoria-costas.jpg', 
             'assets/img/camisa-diretoria-manga.jpg',
-            'assets/img/camisa-diretoria-escudo.jpg' // Nova foto do escudo
+            'assets/img/camisa-diretoria-escudo.jpg' 
         ], 
         hasSize: true, 
         desc: 'Edição limitada "Sapo Bombado". Tecido premium dry-fit, detalhes em dourado e verde oliva.' 
     },
-    { id: 'p3', name: 'Camisa de Jogo', price: 85.00, images: ['https://placehold.co/400x400/1F4229/FFFFFF?text=Camisa+de+Jogo'], hasSize: true, desc: 'Camisa oficial para atletas e guerreiros. Material leve, ideal para a prática esportiva.' },
-    { id: 'p4', name: 'Camisa de Torcida', price: 70.00, images: ['https://placehold.co/400x400/E5F0D8/1F4229?text=Camisa+Torcida'], hasSize: true, desc: 'Mostre seu apoio nas arquibancadas! Malha 100% algodão, confortável e com estampa exclusiva.' },
-    { id: 'p5', name: 'Bandana FurioZOs', price: 25.00, images: ['https://placehold.co/400x400/1F4229/8A9A4A?text=Bandana'], hasSize: false, desc: 'Acessório indispensável. Use na cabeça, no pescoço ou amarrada na mochila. Estilo puramente ZO.' },
+    { id: 'p3', name: 'Camisa de Jogo', price: 85.00, images: ['assets/img/camisa-jogo.jpg'], hasSize: true, desc: 'Camisa oficial para atletas e guerreiros. Material leve, ideal para a prática esportiva.' },
+    { id: 'p4', name: 'Camisa de Torcida', price: 70.00, images: ['assets/img/camisa-torcida.jpg'], hasSize: true, desc: 'Mostre seu apoio nas arquibancadas! Malha 100% algodão, confortável e com estampa exclusiva.' },
+    { id: 'p5', name: 'Bandana FurioZOs', price: 25.00, images: ['assets/img/bandana.jpg'], hasSize: false, desc: 'Acessório indispensável. Use na cabeça, no pescoço ou amarrada na mochila. Estilo puramente ZO.' },
 ];
 
 let selectedProduct = null;
@@ -69,18 +67,25 @@ const showToast = (message, type = 'success') => {
     setTimeout(() => toast.remove(), 3000);
 };
 
+// Renderização dos Produtos (Com Borda Neon Hover)
 function renderProducts() {
-    grid.innerHTML = PRODUCTS.map(p => `
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col border border-gray-100">
-            <div class="relative pb-[100%] cursor-pointer group" onclick="window.openProductModal('${p.id}')">
+    if(!grid) return; // Proteção contra erro caso o HTML não esteja correto
+    
+    grid.innerHTML = PRODUCTS.map((p, index) => `
+        <div class="bg-white rounded-[2rem] shadow-md overflow-hidden hover:shadow-[0_10px_30px_rgba(204,255,0,0.2)] transition-all duration-300 flex flex-col border-2 border-transparent hover:border-[#ccff00]/50 transform hover:-translate-y-2 relative group">
+            
+            ${index === 1 ? '<div class="absolute top-4 left-4 bg-[#ccff00] text-furiozo-dark text-xs font-black px-3 py-1 rounded-full z-20 shadow-md transform -rotate-6">OFICIAL</div>' : ''}
+
+            <div class="relative pb-[100%] cursor-pointer overflow-hidden" onclick="window.openProductModal('${p.id}')">
                 <img src="${p.images[0]}" alt="${p.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
             </div>
-            <div class="p-5 flex flex-col flex-grow">
-                <h3 class="font-sport text-lg text-furiozo-dark uppercase mb-1 flex-grow cursor-pointer hover:text-furiozo-light transition-colors" onclick="window.openProductModal('${p.id}')">${p.name}</h3>
+            
+            <div class="p-6 flex flex-col flex-grow">
+                <h3 class="font-sport text-lg text-furiozo-dark font-black uppercase mb-1 flex-grow cursor-pointer group-hover:text-[#8A9A4A] transition-colors leading-tight tracking-tight" onclick="window.openProductModal('${p.id}')">${p.name}</h3>
                 <div class="flex justify-between items-center mt-4">
-                    <span class="font-bold text-xl text-gray-800">${formatPrice(p.price)}</span>
-                    <button onclick="window.openProductModal('${p.id}')" class="bg-furiozo-light text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-furiozo-dark transition-colors shadow-sm">
-                        <i class="fa-solid fa-plus"></i>
+                    <span class="font-black text-3xl text-gray-900 tracking-tighter">${formatPrice(p.price)}</span>
+                    <button onclick="window.openProductModal('${p.id}')" class="bg-furiozo-dark text-[#ccff00] w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-[#ccff00] group-hover:text-furiozo-dark transition-all shadow-md transform active:scale-95 border border-transparent group-hover:border-furiozo-dark">
+                        <i class="fa-solid fa-plus text-xl"></i>
                     </button>
                 </div>
             </div>
@@ -95,9 +100,7 @@ async function initAuth() {
         } else {
             await signInAnonymously(auth);
         }
-    } catch (err) {
-        console.error("Auth init error:", err);
-    }
+    } catch (err) { console.error("Auth init error:", err); }
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -121,15 +124,9 @@ async function loadCartFromFirestore() {
     try {
         const cartRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'cart', 'current');
         const docSnap = await getDoc(cartRef);
-        if (docSnap.exists()) {
-            cart = docSnap.data().items || [];
-        } else {
-            cart = [];
-        }
+        if (docSnap.exists()) { cart = docSnap.data().items || []; } else { cart = []; }
         updateCartUI();
-    } catch (error) {
-        console.error("Error loading cart:", error);
-    }
+    } catch (error) { console.error("Error loading cart:", error); }
 }
 
 async function saveCartToFirestore() {
@@ -145,7 +142,6 @@ async function saveCartToFirestore() {
 
 window.addToCart = async function() {
     if (!selectedProduct) return;
-    
     const qty = parseInt(document.getElementById('qty-input').value);
     
     if (selectedProduct.hasSize && !selectedSize) {
@@ -157,7 +153,7 @@ window.addToCart = async function() {
         id: selectedProduct.id,
         name: selectedProduct.name,
         price: selectedProduct.price,
-        img: selectedProduct.images[0], // Salva a foto principal no carrinho
+        img: selectedProduct.images[0],
         size: selectedSize || 'Único',
         quantity: qty,
         cartItemId: `${selectedProduct.id}-${selectedSize || 'unico'}`
@@ -173,7 +169,6 @@ window.addToCart = async function() {
     updateCartUI();
     closeModal('product');
     showToast(`${qty}x ${selectedProduct.name} adicionado!`);
-    
     await saveCartToFirestore();
     setTimeout(openCartSidebar, 300);
 };
@@ -251,14 +246,12 @@ function updateCartUI() {
 
 document.getElementById('btn-checkout').addEventListener('click', async () => {
     if (cart.length === 0) return;
-    
     if (!currentUser || currentUser.isAnonymous) {
         closeCartSidebar();
         openAuthModal();
         showToast("Por favor, faça login ou cadastre-se para finalizar a compra.", "error");
         return;
     }
-
     try {
         const orderRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'orders');
         await addDoc(orderRef, {
@@ -267,15 +260,11 @@ document.getElementById('btn-checkout').addEventListener('click', async () => {
             status: 'pendente_pagamento',
             createdAt: serverTimestamp()
         });
-        
         cart = [];
         await saveCartToFirestore();
         updateCartUI();
         closeCartSidebar();
-        
-        const msg = `Pedido realizado com sucesso!\nEntraremos em contato para finalizar o pagamento via PIX.`;
-        showToast(msg);
-        
+        showToast(`Pedido realizado com sucesso!\nEntraremos em contato para finalizar o pagamento.`);
     } catch (err) {
         console.error("Checkout error:", err);
         showToast("Erro ao finalizar compra.", "error");
@@ -293,7 +282,6 @@ window.openProductModal = function(id) {
     document.getElementById('qty-input').value = 1;
     document.getElementById('size-error').classList.add('hidden');
 
-    // Montando a galeria de imagens dinamicamente
     const wrapper = document.getElementById('modal-swiper-wrapper');
     wrapper.innerHTML = selectedProduct.images.map(imgUrl => `
         <div class="swiper-slide flex items-center justify-center p-4">
@@ -301,21 +289,14 @@ window.openProductModal = function(id) {
         </div>
     `).join('');
 
-    // Destrói o carrossel anterior e recria
     if (modalSwiperInstance) {
         modalSwiperInstance.destroy(true, true);
     }
     modalSwiperInstance = new Swiper('.modalSwiper', {
         loop: selectedProduct.images.length > 1,
         grabCursor: true,
-        pagination: {
-            el: ".swiper-pagination",
-            clickable: true,
-        },
-        navigation: {
-            nextEl: ".swiper-button-next",
-            prevEl: ".swiper-button-prev",
-        },
+        pagination: { el: ".swiper-pagination", clickable: true },
+        navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" },
     });
 
     const sizeContainer = document.getElementById('size-selector-container');
@@ -323,11 +304,9 @@ window.openProductModal = function(id) {
     
     if (selectedProduct.hasSize) {
         sizeContainer.classList.remove('hidden');
-        
         const tamanhos = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
-        
         sizeOptions.innerHTML = tamanhos.map(size => `
-            <button onclick="window.selectSize('${size}', this)" class="size-btn px-3 min-w-[2.5rem] h-10 rounded-full border-2 border-gray-300 font-bold text-gray-600 hover:border-furiozo-light hover:text-furiozo-dark transition-all focus:outline-none flex items-center justify-center">
+            <button onclick="window.selectSize('${size}', this)" class="size-btn px-3 min-w-[2.5rem] h-10 rounded-full border-2 border-gray-300 font-bold text-gray-600 hover:border-[#ccff00] hover:text-furiozo-dark transition-all focus:outline-none flex items-center justify-center">
                 ${size}
             </button>
         `).join('');
@@ -342,11 +321,11 @@ window.selectSize = function(size, btnElement) {
     selectedSize = size;
     document.getElementById('size-error').classList.add('hidden');
     document.querySelectorAll('.size-btn').forEach(btn => {
-        btn.classList.remove('bg-furiozo-light', 'text-white', 'border-furiozo-light');
+        btn.classList.remove('bg-[#ccff00]', 'text-furiozo-dark', 'border-[#ccff00]');
         btn.classList.add('border-gray-300', 'text-gray-600');
     });
     btnElement.classList.remove('border-gray-300', 'text-gray-600');
-    btnElement.classList.add('bg-furiozo-light', 'text-white', 'border-furiozo-light');
+    btnElement.classList.add('bg-[#ccff00]', 'text-furiozo-dark', 'border-[#ccff00]');
 };
 
 document.getElementById('qty-plus').addEventListener('click', () => {
@@ -371,18 +350,14 @@ function openCartSidebar() {
 function closeCartSidebar() {
     cartSidebar.classList.add('translate-x-full');
     modalBackdrop.classList.add('opacity-0');
-    setTimeout(() => {
-        modalBackdrop.classList.add('hidden');
-    }, 300);
+    setTimeout(() => { modalBackdrop.classList.add('hidden'); }, 300);
 }
 
 function showModal(type) {
     modalBackdrop.classList.remove('hidden');
     const target = type === 'product' ? productModal : authModal;
     const content = type === 'product' ? productModalContent : authModalContent;
-    
     target.classList.remove('hidden');
-    
     setTimeout(() => {
         modalBackdrop.classList.remove('opacity-0');
         content.classList.remove('scale-95', 'opacity-0');
@@ -392,10 +367,8 @@ function showModal(type) {
 function closeModal(type) {
     const target = type === 'product' ? productModal : authModal;
     const content = type === 'product' ? productModalContent : authModalContent;
-    
     content.classList.add('scale-95', 'opacity-0');
     modalBackdrop.classList.add('opacity-0');
-    
     setTimeout(() => {
         target.classList.add('hidden');
         if (cartSidebar.classList.contains('translate-x-full')) {
@@ -441,8 +414,8 @@ function setAuthMode(mode) {
     authError.classList.add('hidden');
 
     if (mode === 'login') {
-        tabLogin.className = "flex-1 py-2 text-sm font-bold rounded-md bg-white shadow-sm text-furiozo-dark transition-all";
-        tabRegister.className = "flex-1 py-2 text-sm font-bold rounded-md text-gray-500 hover:text-furiozo-dark transition-all bg-transparent";
+        tabLogin.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-furiozo-dark transition-all";
+        tabRegister.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 hover:text-furiozo-dark transition-all bg-transparent";
         nameField.classList.add('hidden');
         document.getElementById('auth-name').removeAttribute('required');
         btnSubmit.textContent = 'Entrar';
@@ -496,11 +469,9 @@ authForm.addEventListener('submit', async (e) => {
 
 function updateAuthUI() {
     const isGuest = !currentUser || currentUser.isAnonymous;
-    
     const btnLoginNav = document.getElementById('btn-login-nav');
     const userInfoNav = document.getElementById('user-info-nav');
     const usernameSpan = document.getElementById('nav-username');
-    
     const btnLoginMobile = document.getElementById('btn-login-mobile');
     const userInfoMobile = document.getElementById('user-info-mobile');
     const usernameMobile = document.getElementById('mobile-username');
@@ -534,32 +505,23 @@ const handleLogout = async () => {
         await signOut(auth);
         await signInAnonymously(auth);
         showToast("Logout realizado.");
-    } catch (err) {
-        console.error(err);
-    }
+    } catch (err) { console.error(err); }
 };
 
 document.getElementById('btn-logout').addEventListener('click', handleLogout);
 document.getElementById('btn-logout-mobile').addEventListener('click', handleLogout);
 
-// SWIPER DO BANNER PRINCIPAL
 const swiperMain = new Swiper('.mySwiper', {
     loop: true,
     grabCursor: true,
-    autoplay: {
-        delay: 5000,
-        disableOnInteraction: false,
-    },
-    navigation: {
-        nextEl: '#next-slide',
-        prevEl: '#prev-slide',
-    },
+    autoplay: { delay: 5000, disableOnInteraction: false },
+    navigation: { nextEl: '#next-slide', prevEl: '#prev-slide' },
 });
 
 document.getElementById('mobile-menu-btn').addEventListener('click', () => {
-    const menu = document.getElementById('mobile-menu');
-    menu.classList.toggle('hidden');
+    document.getElementById('mobile-menu').classList.toggle('hidden');
 });
 
+// AQUI ESTÁ A LÓGICA QUE RENDERIZA OS PRODUTOS
 renderProducts();
 updateCartUI();
