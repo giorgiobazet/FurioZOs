@@ -24,7 +24,7 @@ import {
 import Swiper from "https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.mjs";
 
 // ============================================================================
-// 1. CONFIGURACOES DO FIREBASE, ADMIN E MERCADO PAGO
+// 1. CONFIGURACOES DO FIREBASE, ADMIN E MERCADO PAGO (VIA CLOUDFLARE WORKER)
 // ============================================================================
 const appId = "furiozos-app";
 const CURRENCY_PREFIX = "R\x24 ";
@@ -66,8 +66,8 @@ const INSTALLMENT_RATES = {
 };
 
 const MERCADO_PAGO_CONFIG = {
+    workerUrl: "https://furiozos-pagamento.bblackgamerbr.workers.dev",
     publicKey: "APP_USR-0ec36817-11d7-4726-a2e8-7dbf09bda36e",
-    accessToken: "APP_USR-7337621722875027-101604-aa6e32c631ec2cbc868ed5b9a0c0c593-2238854816",
     atleticaWhatsapp: "5521999999999",
     atleticaEmail: "giorgiocsbazet@gmail.com"
 };
@@ -204,7 +204,7 @@ function showToast(message, type) {
     container.appendChild(toast);
     setTimeout(function () {
         toast.remove();
-    }, 3500);
+    }, 4000);
 }
 
 function isCurrentUserAdmin() {
@@ -767,7 +767,7 @@ window.updateQuantity = async function (cartItemId, delta) {
 };
 
 // ============================================================================
-// 7. CHECKOUT, PARCELAMENTO 12X E INTEGRACAO MERCADO PAGO
+// 7. CHECKOUT, PARCELAMENTO 12X E INTEGRACAO MERCADO PAGO VIA WORKER
 // ============================================================================
 function buildInstallmentsDropdown(baseSubtotal) {
     const select = byId("card-installments");
@@ -855,10 +855,65 @@ window.selectPaymentMethod = function (method) {
     updateCheckoutTotalsUI();
 };
 
+// Detecta automaticamente a bandeira (payment_method_id) e banco emissor (issuer_id) pelo BIN do cartao
+async function detectCardMethodAndIssuer(cardNumber) {
+    const bin = String(cardNumber ? cardNumber : "").replace(/\D/g, "").slice(0, 6);
+    try {
+        if (mpInstance && bin.length >= 6) {
+            const methods = await mpInstance.getPaymentMethods({ bin: bin });
+            if (methods && methods.results && methods.results.length > 0) {
+                const first = methods.results[0];
+                return {
+                    paymentMethodId: first.id,
+                    issuerId: (first.issuer && first.issuer.id) ? first.issuer.id : undefined
+                };
+            }
+        }
+    } catch (e) {
+        console.warn("Fallback BIN:", e);
+    }
+
+    // Fallback por prefixo caso o SDK nao retorne a bandeira
+    if (/^4/.test(bin)) return { paymentMethodId: "visa", issuerId: undefined };
+    if (/^(5[1-5]|2[2-7])/.test(bin)) return { paymentMethodId: "master", issuerId: undefined };
+    if (/^3[47]/.test(bin)) return { paymentMethodId: "amex", issuerId: undefined };
+    if (/^(606282|3841)/.test(bin)) return { paymentMethodId: "hipercard", issuerId: undefined };
+    return { paymentMethodId: "elo", issuerId: undefined };
+}
+
+function translateMpRejectReason(statusDetail, rawMessage) {
+    const map = {
+        "cc_rejected_bad_filled_card_number": "Número do cartão inválido.",
+        "cc_rejected_bad_filled_date": "Data de validade incorreta.",
+        "cc_rejected_bad_filled_other": "Verifique os dados digitados do cartão.",
+        "cc_rejected_bad_filled_security_code": "Código CVV inválido.",
+        "cc_rejected_blacklist": "Cartão bloqueado por segurança.",
+        "cc_rejected_call_for_authorize": "O banco emissor exige autorização para esta compra.",
+        "cc_rejected_card_disabled": "Este cartão está desativado. Ative-o no app do banco.",
+        "cc_rejected_duplicated_payment": "Pagamento duplicado detectado. Aguarde alguns minutos.",
+        "cc_rejected_high_risk": "Recusado pelo antifraude (Nota: o Mercado Pago bloqueia compras usando o mesmo CPF/cartão do dono da conta).",
+        "cc_rejected_insufficient_amount": "Saldo ou limite insuficiente no cartão.",
+        "cc_rejected_invalid_installments": "O cartão não aceita essa quantidade de parcelas.",
+        "cc_rejected_max_attempts": "Limite de tentativas excedido. Tente outro cartão."
+    };
+    if (statusDetail && map[statusDetail]) return map[statusDetail];
+    if (rawMessage && String(rawMessage).toLowerCase().indexOf("payer") !== -1) {
+        return "O Mercado Pago não permite que o titular da conta pague para si mesmo. Teste com o CPF de outra pessoa!";
+    }
+    return rawMessage ? String(rawMessage) : "Transação não autorizada pela operadora.";
+}
+
 async function callMercadoPagoApi(path, method, bodyObj) {
-    const targetUrl = "https://api.mercadopago.com" + path;
+    const baseUrl = String(MERCADO_PAGO_CONFIG.workerUrl ? MERCADO_PAGO_CONFIG.workerUrl : "").replace(/\/+$/, "");
+    if (!baseUrl || baseUrl.indexOf("SEU-SUBDOMINIO") !== -1) {
+        return {
+            ok: false,
+            status: 400,
+            data: { message: "Cole a URL do seu Cloudflare Worker na linha 61 do arquivo main.js!" }
+        };
+    }
+
     const headers = {
-        "Authorization": "Bearer " + MERCADO_PAGO_CONFIG.accessToken,
         "Content-Type": "application/json"
     };
     if (method === "POST") {
@@ -871,16 +926,9 @@ async function callMercadoPagoApi(path, method, bodyObj) {
         body: bodyObj ? JSON.stringify(bodyObj) : undefined
     };
 
-    try {
-        const res = await fetch(targetUrl, fetchOptions);
-        const data = await res.json();
-        return { ok: res.ok, status: res.status, data: data };
-    } catch (directErr) {
-        const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(targetUrl);
-        const res = await fetch(proxyUrl, fetchOptions);
-        const data = await res.json();
-        return { ok: res.ok, status: res.status, data: data };
-    }
+    const res = await fetch(baseUrl + path, fetchOptions);
+    const data = await res.json();
+    return { ok: res.ok, status: res.status, data: data };
 }
 
 function stopPixPolling() {
@@ -1646,7 +1694,6 @@ function updateAuthUI() {
 // 13. INICIALIZACAO DE EVENTOS E SISTEMA
 // ============================================================================
 function bindAllEvents() {
-    // Mascaras
     ["checkout-cpf", "profile-cpf"].forEach(function (id) {
         on(id, "input", function (e) { e.target.value = maskCPF(e.target.value); });
     });
@@ -1659,11 +1706,9 @@ function bindAllEvents() {
     on("card-number", "input", function (e) { e.target.value = maskCard(e.target.value); });
     on("card-expiry", "input", function (e) { e.target.value = maskExpiry(e.target.value); });
 
-    // Personalizacao do produto
     on("custom-name-input", "input", sanitizeCustomInputs);
     on("custom-number-input", "input", sanitizeCustomInputs);
 
-    // Quantidade no modal do produto
     on("qty-plus", "click", function () {
         const input = byId("qty-input");
         if (input && parseInt(input.value, 10) < 10) input.value = String(parseInt(input.value, 10) + 1);
@@ -1674,7 +1719,6 @@ function bindAllEvents() {
     });
     on("btn-add-to-cart", "click", window.addToCart);
 
-    // Carrinho e Modais
     on("btn-cart-nav", "click", openCartSidebar);
     on("btn-cart-mobile", "click", openCartSidebar);
     on("close-cart", "click", closeCartSidebar);
@@ -1698,13 +1742,11 @@ function bindAllEvents() {
         closeCartSidebar();
     });
 
-    // Menu Mobile
     on("mobile-menu-btn", "click", function () {
         const m = byId("mobile-menu");
         if (m) m.classList.toggle("hidden");
     });
 
-    // Login / Cadastro / Perfil / Admin
     on("btn-login-nav", "click", openAuthModal);
     on("btn-login-mobile", "click", function () {
         const m = byId("mobile-menu");
@@ -1736,7 +1778,6 @@ function bindAllEvents() {
         showModal("admin");
     });
 
-    // Esqueci minha senha
     on("btn-forgot-password", "click", async function () {
         const emailEl = byId("auth-email");
         const errEl = byId("auth-error");
@@ -1760,7 +1801,6 @@ function bindAllEvents() {
         }
     });
 
-    // Submit Login / Cadastro
     on("auth-form", "submit", async function (e) {
         e.preventDefault();
         const email = byId("auth-email") ? byId("auth-email").value.trim() : "";
@@ -1805,7 +1845,6 @@ function bindAllEvents() {
         }
     });
 
-    // Logout
     const handleLogout = async function () {
         try {
             if (auth) await signOut(auth);
@@ -1821,7 +1860,6 @@ function bindAllEvents() {
     on("btn-logout", "click", handleLogout);
     on("btn-logout-mobile", "click", handleLogout);
 
-    // Salvar Perfil e Nova Senha
     on("profile-form", "submit", async function (e) {
         e.preventDefault();
         if (!currentUser || currentUser.isAnonymous) return;
@@ -1862,7 +1900,6 @@ function bindAllEvents() {
         }
     });
 
-    // Abrir Checkout
     on("btn-checkout", "click", function () {
         if (cart.length === 0) return;
 
@@ -1899,7 +1936,7 @@ function bindAllEvents() {
         }
     });
 
-    // Submit Checkout (PIX e Cartao)
+    // Submit Checkout (PIX e Cartao via Cloudflare Worker)
     on("checkout-form", "submit", async function (e) {
         e.preventDefault();
         if (cart.length === 0) return;
@@ -1967,8 +2004,8 @@ function bindAllEvents() {
                 const txData = poi ? poi.transaction_data : null;
 
                 if (!res.ok || !txData || !txData.qr_code) {
-                    const msg = (res.data && res.data.message) ? res.data.message : "Verifique se o CPF informado é válido.";
-                    showToast("Não foi possível gerar o PIX: " + msg, "error");
+                    const detailMsg = translateMpRejectReason(res.data ? res.data.status_detail : "", res.data ? res.data.message : "");
+                    showToast("Não foi possível gerar o PIX: " + detailMsg, "error");
                     if (btnSubmit) {
                         btnSubmit.disabled = false;
                         btnSubmit.textContent = "Gerar QR Code PIX";
@@ -2014,7 +2051,7 @@ function bindAllEvents() {
                 }
             } catch (err) {
                 console.error("Erro PIX Mercado Pago:", err);
-                showToast("Erro de comunicação ao gerar PIX. Tente novamente.", "error");
+                showToast("Erro de conexão com o Worker de pagamento. Verifique a URL configurada.", "error");
             } finally {
                 if (btnSubmit) {
                     btnSubmit.disabled = false;
@@ -2051,6 +2088,10 @@ function bindAllEvents() {
                     mpInstance = new window.MercadoPago(MERCADO_PAGO_CONFIG.publicKey, { locale: "pt-BR" });
                 }
 
+                // 1. Identifica a bandeira (visa, master, elo, etc.) e banco emissor pelos 6 primeiros digitos
+                const binInfo = await detectCardMethodAndIssuer(cardNumber);
+
+                // 2. Gera o Token seguro do cartao via SDK Mercado Pago
                 const expYearFull = expYearShort.length === 2 ? ("20" + expYearShort) : expYearShort;
                 const tokenResponse = await mpInstance.createCardToken({
                     cardNumber: cardNumber,
@@ -2063,7 +2104,7 @@ function bindAllEvents() {
                 });
 
                 if (!tokenResponse || !tokenResponse.id) {
-                    showToast("Dados do cartão inválidos ou recusados.", "error");
+                    showToast("Dados do cartão inválidos. Verifique número, validade e CVV.", "error");
                     if (btnSubmit) {
                         btnSubmit.disabled = false;
                         btnSubmit.textContent = "Pagar com Cartão";
@@ -2071,11 +2112,14 @@ function bindAllEvents() {
                     return;
                 }
 
+                // 3. Envia a cobranca completa para a API do Mercado Pago via Cloudflare Worker
                 const paymentPayload = {
                     transaction_amount: finalCardTotal,
                     token: tokenResponse.id,
                     description: "Pedido Atletica FurioZOs - Matricula " + matricula,
                     installments: installments,
+                    payment_method_id: binInfo.paymentMethodId,
+                    issuer_id: binInfo.issuerId,
                     payer: {
                         email: (currentUser && currentUser.email) ? currentUser.email : "aluno@uerj.br",
                         first_name: firstName,
@@ -2101,12 +2145,15 @@ function bindAllEvents() {
                         mpPaymentId: String(res.data.id)
                     });
                 } else {
-                    const detail = (res.data && res.data.status_detail) ? res.data.status_detail : "Transação não autorizada pela operadora.";
-                    showToast("Cartão recusado: " + detail, "error");
+                    const reason = translateMpRejectReason(
+                        res.data ? res.data.status_detail : "",
+                        res.data ? res.data.message : ""
+                    );
+                    showToast("Cartão recusado: " + reason, "error");
                 }
             } catch (cardErr) {
                 console.error("Erro no processamento do cartão:", cardErr);
-                showToast("Cartão recusado ou dados inválidos. Verifique número, validade e CVV.", "error");
+                showToast("Não foi possível validar o cartão. Verifique o número, validade e CVV.", "error");
             } finally {
                 if (btnSubmit) {
                     btnSubmit.disabled = false;
@@ -2116,7 +2163,6 @@ function bindAllEvents() {
         }
     });
 
-    // Exportar Excel (.xlsx)
     on("btn-export-excel", "click", function () {
         if (!isCurrentUserAdmin()) return;
         if (typeof XLSX === "undefined") {
@@ -2193,12 +2239,10 @@ function bindAllEvents() {
 }
 
 async function bootstrapApp() {
-    // 1. Renderiza a vitrine, eventos e carrinho IMEDIATAMENTE (sem depender de rede)
     renderProducts();
     updateCartUI();
     bindAllEvents();
 
-    // 2. Inicializa o carrossel principal com protecao contra falhas
     try {
         new Swiper(".mySwiper", {
             loop: true,
@@ -2210,7 +2254,6 @@ async function bootstrapApp() {
         console.warn("Swiper principal:", swErr);
     }
 
-    // 3. Conecta ao Firebase Auth e Firestore em segundo plano
     if (auth) {
         onAuthStateChanged(auth, async function (user) {
             if (user) {
