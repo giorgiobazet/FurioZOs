@@ -1,0 +1,114 @@
+/* public/assets/css/style.css */
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #eaf2e3;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-sport {
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* Custom Scrollbar (Página e Modais) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #8A9A4A;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #1F4229;
+}
+
+/* Carousel Transitions */
+.carousel-slide {
+    transition: transform 0.5s ease-in-out;
+}
+
+/* Modal Transitions */
+.modal-enter {
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+.modal-enter-active {
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 300ms, transform 300ms;
+}
+
+/* Remove setas padrão de inputs numéricos */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Toast (Avisos Flutuantes sempre acima de qualquer Modal) */
+#toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    pointer-events: none;
+}
+
+.toast {
+    background: #1F4229;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 12px;
+    margin-top: 10px;
+    border-left: 5px solid #ccff00;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    animation: fadein 0.35s forwards, fadeout 0.4s 3s forwards;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    max-width: 360px;
+    pointer-events: auto;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeout {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+}
