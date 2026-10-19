@@ -40,7 +40,8 @@ const firebaseConfig = {
 };
 
 const ADMIN_EMAILS = [
-    "giorgiocsbazet@gmail.com"
+    "giorgiocsbazet@gmail.com",
+    "caiorjazevedo@gmail.com"
 ];
 
 const PRICING_RULES = {
