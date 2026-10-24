@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Usuario logado com e-mail/senha (sessoes anonimas nao contam)
+    function registered() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // Admin = existe o documento artifacts/furiozos-app/admins/{UID}
+    // (criado manualmente no console do Firebase; ninguem grava pelo site)
+    function isAdmin() {
+      return registered()
+        && exists(/databases/$(database)/documents/artifacts/furiozos-app/admins/$(request.auth.uid));
+    }
+
+    // Lista de administradores: cada um so consegue ler o proprio registro
+    match /artifacts/{appId}/admins/{uid} {
+      allow read: if registered() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Carrinho e perfil (cart/current e cart/profile): somente o dono
+    match /artifacts/{appId}/users/{userId}/cart/{docId} {
+      allow read, write: if registered() && request.auth.uid == userId;
+    }
+
+    // Catalogo: leitura publica, escrita so da diretoria.
+    // O estoque de pronta entrega e baixado pelo Worker (conta de servico).
+    match /artifacts/{appId}/public/data/products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Pedidos: criados e confirmados SOMENTE pelo Worker de pagamento.
+    // O cliente apenas le os proprios pedidos; a diretoria le todos.
+    match /artifacts/{appId}/public/data/orders/{orderId} {
+      allow read: if isAdmin()
+        || (registered() && resource.data.userId == request.auth.uid);
+      allow create: if false;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'adminNote', 'deliveredAtISO']);
+      allow delete: if isAdmin();
+    }
+  }
+}

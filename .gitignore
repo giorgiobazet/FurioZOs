@@ -67,3 +67,10 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+
+*-firebase-adminsdk-*.json
+worker/node_modules/
+worker/.wrangler/
+.dev.vars
+.env
+.firebase/
