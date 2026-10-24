@@ -1,8 +1,9 @@
 // public/assets/js/main.js
+// Versao 2 (seguranca): pagamentos e pedidos passam a ser processados pelo
+// Cloudflare Worker. O navegador nunca define precos nem status "pago".
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import {
     getAuth,
-    signInAnonymously,
     onAuthStateChanged,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -18,17 +19,20 @@ import {
     setDoc,
     getDocs,
     collection,
-    addDoc,
+    query,
+    where,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import Swiper from "https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.mjs";
 
 // ============================================================================
-// 1. CONFIGURACOES DO FIREBASE, ADMIN E MERCADO PAGO (VIA CLOUDFLARE WORKER)
+// 1. CONFIGURACOES DO FIREBASE E MERCADO PAGO (VIA CLOUDFLARE WORKER)
 // ============================================================================
 const appId = "furiozos-app";
 const CURRENCY_PREFIX = "R\x24 ";
 
+// A configuracao web do Firebase e publica por natureza. A protecao real
+// esta nas regras do Firestore e nas restricoes da chave no Google Cloud.
 const firebaseConfig = {
     apiKey: "AIzaSyDq8DjGLsN_yLlTP2brfyhfLgU23ROP38M",
     authDomain: "atletica-furiozos.firebaseapp.com",
@@ -39,11 +43,10 @@ const firebaseConfig = {
     measurementId: "G-P39HJJCQLN"
 };
 
-const ADMIN_EMAILS = [
-    "giorgiocsbazet@gmail.com",
-    "caiorjazevedo@gmail.com"
-];
+// Os administradores agora ficam na colecao artifacts/furiozos-app/admins
+// (documento com o UID de cada admin). Nada de lista de e-mails no codigo.
 
+// Usado APENAS para exibir valores. O Worker recalcula tudo no servidor.
 const PRICING_RULES = {
     CUSTOM_NAME_FEE: 5.00,
     CUSTOM_NUMBER_FEE: 5.00,
@@ -69,9 +72,22 @@ const INSTALLMENT_RATES = {
 const MERCADO_PAGO_CONFIG = {
     workerUrl: "https://furiozos-pagamento.bblackgamerbr.workers.dev",
     publicKey: "APP_USR-0ec36817-11d7-4726-a2e8-7dbf09bda36e",
-    atleticaWhatsapp: "5521999999999",
-    atleticaEmail: "giorgiocsbazet@gmail.com"
+    atleticaWhatsapp: "5521978251441",
+    atleticaEmail: "atleticafuriozos@gmail.com"
 };
+
+const ORDER_STATUS = {
+    PENDING: "Aguardando pagamento",
+    REVIEW: "Em análise",
+    PAID: "Pago / Confirmado",
+    REJECTED: "Pagamento recusado",
+    CANCELLED: "Cancelado",
+    REFUNDED: "Estornado"
+};
+
+const MAX_QTY_PER_ITEM = 10;
+const CUSTOM_NAME_ALLOWED = /[^A-Z0-9ÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝ .'-]/g;
+const PRODUCT_STATUSES = ["disponivel", "em_breve", "esgotado"];
 
 let app = null;
 let db = null;
@@ -151,7 +167,10 @@ const DEFAULT_PRODUCTS = [
         id: "p5",
         name: "Bandana FurioZOs",
         price: 25.00,
-        images: ["assets/img/bandana.jpg"],
+        images: [
+            "assets/img/bandana-frente.jpg",
+            "assets/img/bandana-costas.jpg"
+        ],
         hasSize: false,
         isShirt: false,
         status: "em_breve",
@@ -163,6 +182,7 @@ const DEFAULT_PRODUCTS = [
 let productsCatalog = DEFAULT_PRODUCTS.slice();
 let ordersList = [];
 let currentUser = null;
+let isAdminUser = false;
 let userProfile = { name: "", matricula: "", cpf: "", phone: "" };
 let cart = [];
 let modalSwiperInstance = null;
@@ -171,9 +191,10 @@ let selectedProduct = null;
 let selectedSize = null;
 let selectedDeliveryMode = "lote";
 let selectedPaymentMethod = "pix";
-let activePixPaymentId = null;
+let activeOrderId = null;
 let pixPollingInterval = null;
 let authMode = "login";
+const confirmedOrderIds = new Set();
 
 // ============================================================================
 // 3. UTILITARIOS E HELPERS DE DOM SEGUROS
@@ -189,6 +210,13 @@ function on(id, eventName, handler) {
     }
 }
 
+// Escapa qualquer texto antes de entrar em innerHTML (previne XSS)
+function esc(value) {
+    return String(value === null || value === undefined ? "" : value).replace(/[&<>"'`]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;", "`": "&#96;" }[c];
+    });
+}
+
 function formatPrice(price) {
     const num = Number(price ? price : 0);
     return CURRENCY_PREFIX + num.toFixed(2).replace(".", ",");
@@ -200,19 +228,68 @@ function showToast(message, type) {
     const toast = document.createElement("div");
     const isErr = type === "error";
     toast.className = "toast" + (isErr ? " !bg-red-600" : "");
-    const icon = isErr ? "fa-triangle-exclamation" : "fa-check-circle";
-    toast.innerHTML = '<i class="fa-solid ' + icon + '"></i> <span>' + message + '</span>';
+    const icon = document.createElement("i");
+    icon.className = "fa-solid " + (isErr ? "fa-triangle-exclamation" : "fa-check-circle");
+    const span = document.createElement("span");
+    span.textContent = String(message);
+    toast.appendChild(icon);
+    toast.appendChild(document.createTextNode(" "));
+    toast.appendChild(span);
     container.appendChild(toast);
     setTimeout(function () {
         toast.remove();
     }, 4000);
 }
 
+function isRegisteredUser() {
+    return Boolean(currentUser && !currentUser.isAnonymous);
+}
+
 function isCurrentUserAdmin() {
-    if (!currentUser) return false;
-    if (currentUser.isAnonymous) return false;
-    if (!currentUser.email) return false;
-    return ADMIN_EMAILS.indexOf(currentUser.email.trim().toLowerCase()) !== -1;
+    return isRegisteredUser() && isAdminUser;
+}
+
+async function refreshAdminFlag() {
+    isAdminUser = false;
+    if (!db || !isRegisteredUser()) return;
+    try {
+        const snap = await getDoc(doc(db, "artifacts", appId, "admins", currentUser.uid));
+        isAdminUser = snap.exists();
+    } catch (err) {
+        isAdminUser = false;
+    }
+}
+
+function findProduct(id) {
+    for (let i = 0; i < productsCatalog.length; i++) {
+        if (productsCatalog[i].id === id) return productsCatalog[i];
+    }
+    return null;
+}
+
+function statusBadgeClass(status) {
+    if (status === ORDER_STATUS.PAID) return "bg-green-100 text-green-800";
+    if (status === ORDER_STATUS.PENDING || status === ORDER_STATUS.REVIEW) return "bg-amber-100 text-amber-800";
+    return "bg-red-100 text-red-700";
+}
+
+function statusTextClass(status) {
+    if (status === ORDER_STATUS.PAID) return "text-green-600";
+    if (status === ORDER_STATUS.PENDING || status === ORDER_STATUS.REVIEW) return "text-amber-600";
+    return "text-red-600";
+}
+
+function isValidCpf(cpf) {
+    const c = String(cpf ? cpf : "").replace(/\D/g, "");
+    if (!/^\d{11}$/.test(c) || /^(\d)\1{10}$/.test(c)) return false;
+    const checks = [9, 10];
+    for (let k = 0; k < checks.length; k++) {
+        const t = checks[k];
+        let sum = 0;
+        for (let i = 0; i < t; i++) sum += Number(c[i]) * (t + 1 - i);
+        if (((sum * 10) % 11) % 10 !== Number(c[t])) return false;
+    }
+    return true;
 }
 
 function maskCPF(val) {
@@ -262,6 +339,7 @@ function renderProducts() {
         const isAvailable = p.status === "disponivel";
         const isComingSoon = p.status === "em_breve";
         const isSoldOut = p.status === "esgotado";
+        const pid = esc(p.id);
 
         let topBadge = "";
         if (p.id === "p2" && isAvailable) {
@@ -271,10 +349,6 @@ function renderProducts() {
         } else if (isSoldOut) {
             topBadge = '<div class="absolute top-4 right-4 bg-red-600 text-white text-[11px] font-black px-3 py-1 rounded-full z-20 shadow-md uppercase tracking-wider">Esgotado</div>';
         }
-
-        const clickAction = isAvailable
-            ? "window.openProductModal('" + p.id + "')"
-            : "window.notifyUnavailableProduct('" + p.status + "')";
 
         let priceAreaHTML = "";
         if (isComingSoon) {
@@ -295,8 +369,8 @@ function renderProducts() {
         }
 
         const actionBtnHTML = isAvailable
-            ? '<button type="button" onclick="' + clickAction + '" class="bg-furiozo-dark text-[#ccff00] w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-[#ccff00] group-hover:text-furiozo-dark transition-all shadow-md transform active:scale-95 border border-transparent group-hover:border-furiozo-dark" title="Personalizar e Comprar"><i class="fa-solid fa-plus text-xl"></i></button>'
-            : '<button type="button" onclick="' + clickAction + '" class="bg-gray-200 text-gray-500 w-12 h-12 rounded-full flex items-center justify-center cursor-not-allowed opacity-75" title="Indisponível no momento"><i class="fa-solid fa-lock text-base"></i></button>';
+            ? '<button type="button" data-product-id="' + pid + '" class="bg-furiozo-dark text-[#ccff00] w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-[#ccff00] group-hover:text-furiozo-dark transition-all shadow-md transform active:scale-95 border border-transparent group-hover:border-furiozo-dark" title="Personalizar e Comprar"><i class="fa-solid fa-plus text-xl"></i></button>'
+            : '<button type="button" data-product-id="' + pid + '" class="bg-gray-200 text-gray-500 w-12 h-12 rounded-full flex items-center justify-center cursor-not-allowed opacity-75" title="Indisponível no momento"><i class="fa-solid fa-lock text-base"></i></button>';
 
         const cardHoverClass = isAvailable
             ? "hover:shadow-[0_10px_30px_rgba(204,255,0,0.25)] hover:border-[#ccff00]/60 transform hover:-translate-y-2"
@@ -313,12 +387,12 @@ function renderProducts() {
         htmlList.push(
             '<div class="bg-white rounded-[2rem] shadow-md overflow-hidden ' + cardHoverClass + ' transition-all duration-300 flex flex-col border-2 border-transparent relative group">' +
                 topBadge +
-                '<div class="relative pb-[100%] ' + cursorClass + ' overflow-hidden bg-gray-100" onclick="' + clickAction + '">' +
-                    '<img src="' + imgUrl + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="' + p.name + '" class="absolute inset-0 w-full h-full object-cover ' + imgEffectClass + ' transition-transform duration-500">' +
+                '<div class="relative pb-[100%] ' + cursorClass + ' overflow-hidden bg-gray-100" data-product-id="' + pid + '">' +
+                    '<img src="' + esc(imgUrl) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="' + esc(p.name) + '" class="absolute inset-0 w-full h-full object-cover ' + imgEffectClass + ' transition-transform duration-500">' +
                 '</div>' +
                 '<div class="p-6 flex flex-col flex-grow">' +
-                    '<h3 class="font-sport text-lg text-furiozo-dark font-black uppercase mb-1 flex-grow ' + titleHoverClass + ' transition-colors leading-tight tracking-tight" onclick="' + clickAction + '">' +
-                        p.name +
+                    '<h3 class="font-sport text-lg text-furiozo-dark font-black uppercase mb-1 flex-grow ' + titleHoverClass + ' transition-colors leading-tight tracking-tight" data-product-id="' + pid + '">' +
+                        esc(p.name) +
                     '</h3>' +
                     customTagHTML +
                     '<div class="flex justify-between items-center mt-4 pt-2 border-t border-gray-100">' +
@@ -353,7 +427,7 @@ function getCustomizationState() {
     const rawName = nameEl ? nameEl.value : "";
     const rawNum = numEl ? numEl.value : "";
 
-    const customName = rawName.trim().toUpperCase().slice(0, 10);
+    const customName = rawName.toUpperCase().replace(CUSTOM_NAME_ALLOWED, "").trim().slice(0, 10);
     const customNumber = rawNum.trim().replace(/\D/g, "").slice(0, 2);
     const hasName = customName.length > 0;
     const hasNumber = customNumber.length > 0;
@@ -371,7 +445,7 @@ function sanitizeCustomInputs() {
     const numEl = byId("custom-number-input");
     if (!nameEl || !numEl) return;
 
-    const cleanName = nameEl.value.toUpperCase().slice(0, 10);
+    const cleanName = nameEl.value.toUpperCase().replace(CUSTOM_NAME_ALLOWED, "").slice(0, 10);
     if (nameEl.value !== cleanName) nameEl.value = cleanName;
     if (counterEl) counterEl.textContent = cleanName.trim().length + "/10";
 
@@ -487,18 +561,12 @@ window.selectDeliveryMode = function (mode) {
             return;
         }
     }
-    selectedDeliveryMode = mode;
+    selectedDeliveryMode = mode === "imediata" ? "imediata" : "lote";
     evaluateDeliveryAndPrice();
 };
 
 window.openProductModal = function (id) {
-    selectedProduct = null;
-    for (let i = 0; i < productsCatalog.length; i++) {
-        if (productsCatalog[i].id === id) {
-            selectedProduct = productsCatalog[i];
-            break;
-        }
-    }
+    selectedProduct = findProduct(id);
 
     if (!selectedProduct || selectedProduct.status !== "disponivel") {
         window.notifyUnavailableProduct(selectedProduct ? selectedProduct.status : "em_breve");
@@ -524,7 +592,7 @@ window.openProductModal = function (id) {
         for (let i = 0; i < imgs.length; i++) {
             slides.push(
                 '<div class="swiper-slide flex items-center justify-center p-4">' +
-                    '<img src="' + imgs[i] + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="Produto" class="max-w-full max-h-[260px] md:max-h-[380px] object-contain drop-shadow-md rounded-xl">' +
+                    '<img src="' + esc(imgs[i]) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="Produto" class="max-w-full max-h-[260px] md:max-h-[380px] object-contain drop-shadow-md rounded-xl">' +
                 '</div>'
             );
         }
@@ -554,7 +622,7 @@ window.openProductModal = function (id) {
         for (let i = 0; i < tamanhos.length; i++) {
             const s = tamanhos[i];
             btns.push(
-                '<button type="button" onclick="window.selectSize(\'' + s + '\', this)" class="size-btn px-3 min-w-[2.5rem] h-10 rounded-full border-2 border-gray-300 font-bold text-gray-600 hover:border-[#ccff00] hover:text-furiozo-dark transition-all focus:outline-none flex items-center justify-center text-sm">' +
+                '<button type="button" data-size="' + s + '" class="size-btn px-3 min-w-[2.5rem] h-10 rounded-full border-2 border-gray-300 font-bold text-gray-600 hover:border-[#ccff00] hover:text-furiozo-dark transition-all focus:outline-none flex items-center justify-center text-sm">' +
                     s +
                 '</button>'
             );
@@ -601,6 +669,24 @@ function getCartBaseSubtotal() {
     return sum;
 }
 
+// Recalcula o preco exibido de cada item com base no catalogo atual
+// (evita mostrar valores antigos ou alterados no localStorage)
+function refreshCartPrices() {
+    for (let i = 0; i < cart.length; i++) {
+        const item = cart[i];
+        const p = findProduct(item.id);
+        if (!p) continue;
+        const customFee = (item.customName ? PRICING_RULES.CUSTOM_NAME_FEE : 0) + (item.customNumber ? PRICING_RULES.CUSTOM_NUMBER_FEE : 0);
+        const deliveryFee = item.deliveryMode === "imediata" ? PRICING_RULES.IMMEDIATE_DELIVERY_FEE : 0;
+        item.basePrice = Number(p.price);
+        item.customFee = customFee;
+        item.deliveryFee = deliveryFee;
+        item.price = Number(p.price) + customFee + deliveryFee;
+        item.name = p.name;
+        item.quantity = Math.max(1, Math.min(MAX_QTY_PER_ITEM, parseInt(item.quantity, 10) || 1));
+    }
+}
+
 function updateCartUI() {
     let totalQty = 0;
     for (let i = 0; i < cart.length; i++) {
@@ -635,14 +721,15 @@ function updateCartUI() {
     for (let i = 0; i < cart.length; i++) {
         const item = cart[i];
         const itemTotal = Number(item.price) * Number(item.quantity);
+        const cid = esc(item.cartItemId);
         totalValue += itemTotal;
 
         const customBadges = [];
         if (item.customName) {
-            customBadges.push('<span class="bg-furiozo-accent text-furiozo-dark px-2 py-0.5 rounded font-bold text-[10px]">Nome: ' + item.customName + '</span>');
+            customBadges.push('<span class="bg-furiozo-accent text-furiozo-dark px-2 py-0.5 rounded font-bold text-[10px]">Nome: ' + esc(item.customName) + '</span>');
         }
         if (item.customNumber) {
-            customBadges.push('<span class="bg-furiozo-accent text-furiozo-dark px-2 py-0.5 rounded font-bold text-[10px]">Nº: ' + item.customNumber + '</span>');
+            customBadges.push('<span class="bg-furiozo-accent text-furiozo-dark px-2 py-0.5 rounded font-bold text-[10px]">Nº: ' + esc(item.customNumber) + '</span>');
         }
 
         const deliveryBadge = item.deliveryMode === "imediata"
@@ -651,19 +738,19 @@ function updateCartUI() {
 
         rows.push(
             '<div class="flex gap-3 bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100">' +
-                '<img src="' + item.img + '" onerror="this.src=\'https://placehold.co/150x150/1F4229/ccff00?text=FurioZOs\'" class="w-20 h-20 object-cover rounded-xl border border-gray-200 shrink-0">' +
+                '<img src="' + esc(item.img) + '" onerror="this.src=\'https://placehold.co/150x150/1F4229/ccff00?text=FurioZOs\'" class="w-20 h-20 object-cover rounded-xl border border-gray-200 shrink-0">' +
                 '<div class="flex-grow flex flex-col justify-between">' +
                     '<div class="flex justify-between items-start gap-2">' +
-                        '<h4 class="font-bold text-sm text-gray-800 leading-tight">' + item.name + '</h4>' +
-                        '<button type="button" onclick="window.removeFromCart(\'' + item.cartItemId + '\')" class="text-gray-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>' +
+                        '<h4 class="font-bold text-sm text-gray-800 leading-tight">' + esc(item.name) + '</h4>' +
+                        '<button type="button" data-cart-action="remove" data-cart-id="' + cid + '" class="text-gray-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>' +
                     '</div>' +
-                    '<p class="text-xs text-gray-500 font-semibold mt-0.5">Tam: <strong class="text-gray-800">' + item.size + '</strong> • Unit: ' + formatPrice(item.price) + '</p>' +
+                    '<p class="text-xs text-gray-500 font-semibold mt-0.5">Tam: <strong class="text-gray-800">' + esc(item.size) + '</strong> • Unit: ' + formatPrice(item.price) + '</p>' +
                     '<div class="flex flex-wrap gap-1 my-1.5">' + customBadges.join("") + deliveryBadge + '</div>' +
                     '<div class="flex justify-between items-center mt-1">' +
                         '<div class="flex items-center border border-gray-200 rounded-lg px-2 py-0.5 bg-gray-50">' +
-                            '<button type="button" onclick="window.updateQuantity(\'' + item.cartItemId + '\', -1)" class="text-gray-500 hover:text-furiozo-dark px-1"><i class="fa-solid fa-minus text-[10px]"></i></button>' +
-                            '<span class="mx-2 text-xs font-bold w-4 text-center">' + item.quantity + '</span>' +
-                            '<button type="button" onclick="window.updateQuantity(\'' + item.cartItemId + '\', 1)" class="text-gray-500 hover:text-furiozo-dark px-1"><i class="fa-solid fa-plus text-[10px]"></i></button>' +
+                            '<button type="button" data-cart-action="dec" data-cart-id="' + cid + '" class="text-gray-500 hover:text-furiozo-dark px-1"><i class="fa-solid fa-minus text-[10px]"></i></button>' +
+                            '<span class="mx-2 text-xs font-bold w-4 text-center">' + Number(item.quantity) + '</span>' +
+                            '<button type="button" data-cart-action="inc" data-cart-id="' + cid + '" class="text-gray-500 hover:text-furiozo-dark px-1"><i class="fa-solid fa-plus text-[10px]"></i></button>' +
                         '</div>' +
                         '<span class="font-black text-furiozo-dark text-sm">' + formatPrice(itemTotal) + '</span>' +
                     '</div>' +
@@ -680,7 +767,7 @@ window.addToCart = async function () {
     if (!selectedProduct) return;
     const qtyEl = byId("qty-input");
     const rawQty = parseInt(qtyEl ? qtyEl.value : "1", 10);
-    const qty = isNaN(rawQty) ? 1 : rawQty;
+    const qty = Math.max(1, Math.min(MAX_QTY_PER_ITEM, isNaN(rawQty) ? 1 : rawQty));
 
     if (selectedProduct.hasSize && !selectedSize) {
         if (byId("size-error")) byId("size-error").classList.remove("hidden");
@@ -691,46 +778,49 @@ window.addToCart = async function () {
     const deliveryFee = selectedDeliveryMode === "imediata" ? PRICING_RULES.IMMEDIATE_DELIVERY_FEE : 0;
     const stockVal = selectedProduct.immediateStock ? Number(selectedProduct.immediateStock) : 0;
 
-    if (selectedDeliveryMode === "imediata" && qty > stockVal) {
-        showToast("Apenas " + stockVal + " unid. disponíveis para pronta entrega.", "error");
-        return;
-    }
-
     const finalUnitPrice = Number(selectedProduct.price) + state.customFee + deliveryFee;
     const sizeKey = selectedSize ? selectedSize : "unico";
     const nameKey = state.customName ? state.customName : "semnome";
     const numKey = state.customNumber ? state.customNumber : "semnum";
     const uniqueKey = [selectedProduct.id, sizeKey, nameKey, numKey, selectedDeliveryMode].join("-");
 
-    const cartItem = {
-        id: selectedProduct.id,
-        name: selectedProduct.name,
-        basePrice: Number(selectedProduct.price),
-        customFee: state.customFee,
-        deliveryFee: deliveryFee,
-        price: finalUnitPrice,
-        img: (selectedProduct.images && selectedProduct.images.length > 0) ? selectedProduct.images[0] : "assets/img/logo-atletica.jpg",
-        size: selectedSize ? selectedSize : "Único",
-        customName: state.customName,
-        customNumber: state.customNumber,
-        deliveryMode: selectedDeliveryMode,
-        isShirt: Boolean(selectedProduct.isShirt),
-        quantity: qty,
-        cartItemId: uniqueKey
-    };
-
     let foundIndex = -1;
     for (let i = 0; i < cart.length; i++) {
-        if (cart[i].cartItemId === cartItem.cartItemId) {
+        if (cart[i].cartItemId === uniqueKey) {
             foundIndex = i;
             break;
         }
     }
 
+    const alreadyInCart = foundIndex > -1 ? Number(cart[foundIndex].quantity) : 0;
+    if (selectedDeliveryMode === "imediata" && alreadyInCart + qty > stockVal) {
+        showToast("Apenas " + stockVal + " unid. disponíveis para pronta entrega.", "error");
+        return;
+    }
+    if (alreadyInCart + qty > MAX_QTY_PER_ITEM) {
+        showToast("Máximo de " + MAX_QTY_PER_ITEM + " unidades por item.", "error");
+        return;
+    }
+
     if (foundIndex > -1) {
-        cart[foundIndex].quantity += qty;
+        cart[foundIndex].quantity = alreadyInCart + qty;
     } else {
-        cart.push(cartItem);
+        cart.push({
+            id: selectedProduct.id,
+            name: selectedProduct.name,
+            basePrice: Number(selectedProduct.price),
+            customFee: state.customFee,
+            deliveryFee: deliveryFee,
+            price: finalUnitPrice,
+            img: (selectedProduct.images && selectedProduct.images.length > 0) ? selectedProduct.images[0] : "assets/img/logo-atletica.jpg",
+            size: selectedSize ? selectedSize : "Único",
+            customName: state.customName,
+            customNumber: state.customNumber,
+            deliveryMode: selectedDeliveryMode,
+            isShirt: Boolean(selectedProduct.isShirt),
+            quantity: qty,
+            cartItemId: uniqueKey
+        });
     }
 
     updateCartUI();
@@ -741,13 +831,7 @@ window.addToCart = async function () {
 };
 
 window.removeFromCart = async function (cartItemId) {
-    const nextCart = [];
-    for (let i = 0; i < cart.length; i++) {
-        if (cart[i].cartItemId !== cartItemId) {
-            nextCart.push(cart[i]);
-        }
-    }
-    cart = nextCart;
+    cart = cart.filter(function (item) { return item.cartItemId !== cartItemId; });
     updateCartUI();
     await saveCartData();
 };
@@ -755,14 +839,27 @@ window.removeFromCart = async function (cartItemId) {
 window.updateQuantity = async function (cartItemId, delta) {
     for (let i = 0; i < cart.length; i++) {
         if (cart[i].cartItemId === cartItemId) {
-            cart[i].quantity += delta;
-            if (cart[i].quantity <= 0) {
+            const next = Number(cart[i].quantity) + Number(delta);
+            if (next <= 0) {
                 await window.removeFromCart(cartItemId);
-            } else {
-                updateCartUI();
-                await saveCartData();
+                return;
             }
-            break;
+            if (next > MAX_QTY_PER_ITEM) {
+                showToast("Máximo de " + MAX_QTY_PER_ITEM + " unidades por item.", "error");
+                return;
+            }
+            if (cart[i].deliveryMode === "imediata") {
+                const p = findProduct(cart[i].id);
+                const stockVal = p && p.immediateStock ? Number(p.immediateStock) : 0;
+                if (next > stockVal) {
+                    showToast("Apenas " + stockVal + " unid. disponíveis para pronta entrega.", "error");
+                    return;
+                }
+            }
+            cart[i].quantity = next;
+            updateCartUI();
+            await saveCartData();
+            return;
         }
     }
 };
@@ -822,7 +919,7 @@ function updateCheckoutTotalsUI() {
 }
 
 window.selectPaymentMethod = function (method) {
-    selectedPaymentMethod = method;
+    selectedPaymentMethod = method === "card" ? "card" : "pix";
     const tabPix = byId("tab-pay-pix");
     const tabCard = byId("tab-pay-card");
     const panelPix = byId("payment-pix-panel");
@@ -830,7 +927,7 @@ window.selectPaymentMethod = function (method) {
     const btnSubmit = byId("btn-submit-payment");
     const qrBox = byId("pix-qrcode-box");
 
-    if (method === "pix") {
+    if (selectedPaymentMethod === "pix") {
         if (tabPix) tabPix.className = "p-4 rounded-2xl border-2 border-furiozo-dark bg-furiozo-accent/50 font-black text-furiozo-dark flex flex-col items-center justify-center gap-1 transition-all shadow-sm";
         if (tabCard) tabCard.className = "p-4 rounded-2xl border-2 border-gray-200 bg-white font-bold text-gray-600 flex flex-col items-center justify-center gap-1 transition-all";
         if (panelPix) panelPix.classList.remove("hidden");
@@ -904,32 +1001,47 @@ function translateMpRejectReason(statusDetail, rawMessage) {
     return rawMessage ? String(rawMessage) : "Transação não autorizada pela operadora.";
 }
 
-async function callMercadoPagoApi(path, method, bodyObj) {
+// Chamada autenticada ao Worker (envia o ID token do Firebase)
+async function callWorker(path, method, bodyObj) {
     const baseUrl = String(MERCADO_PAGO_CONFIG.workerUrl ? MERCADO_PAGO_CONFIG.workerUrl : "").replace(/\/+$/, "");
-    if (!baseUrl || baseUrl.indexOf("SEU-SUBDOMINIO") !== -1) {
-        return {
-            ok: false,
-            status: 400,
-            data: { message: "Cole a URL do seu Cloudflare Worker na linha 61 do arquivo main.js!" }
-        };
+    if (!baseUrl) {
+        return { ok: false, status: 400, data: { message: "URL do Worker de pagamento não configurada." } };
+    }
+    if (!isRegisteredUser()) {
+        return { ok: false, status: 401, data: { message: "Faça login para continuar." } };
     }
 
-    const headers = {
-        "Content-Type": "application/json"
-    };
-    if (method === "POST") {
-        headers["X-Idempotency-Key"] = "fz-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-    }
-
-    const fetchOptions = {
+    const idToken = await currentUser.getIdToken();
+    const res = await fetch(baseUrl + path, {
         method: method,
-        headers: headers,
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + idToken
+        },
         body: bodyObj ? JSON.stringify(bodyObj) : undefined
-    };
+    });
 
-    const res = await fetch(baseUrl + path, fetchOptions);
-    const data = await res.json();
+    let data = {};
+    try {
+        data = await res.json();
+    } catch (e) {
+        data = {};
+    }
     return { ok: res.ok, status: res.status, data: data };
+}
+
+// O Worker recebe apenas O QUE foi escolhido; o preco e calculado la
+function buildCheckoutItems() {
+    return cart.map(function (item) {
+        return {
+            id: item.id,
+            size: item.size,
+            customName: item.customName ? item.customName : "",
+            customNumber: item.customNumber ? item.customNumber : "",
+            deliveryMode: item.deliveryMode === "imediata" ? "imediata" : "lote",
+            quantity: Number(item.quantity)
+        };
+    });
 }
 
 function stopPixPolling() {
@@ -939,33 +1051,46 @@ function stopPixPolling() {
     }
 }
 
-async function checkPixPaymentStatus(paymentId, checkoutMeta, silent) {
-    if (!paymentId) return;
+async function checkOrderStatus(orderId, silent) {
+    if (!orderId) return;
     try {
-        const res = await callMercadoPagoApi("/v1/payments/" + paymentId, "GET", null);
-        if (res.ok && res.data && res.data.status === "approved") {
+        const res = await callWorker("/orders/" + encodeURIComponent(orderId), "GET", null);
+        const status = res.data ? res.data.status : "";
+
+        if (res.ok && status === ORDER_STATUS.PAID) {
             stopPixPolling();
             const statusInd = byId("pix-status-indicator");
             if (statusInd) {
                 statusInd.innerHTML = '<i class="fa-solid fa-circle-check text-green-600"></i> Pagamento Aprovado pelo Banco!';
             }
-            await finalizeOrderRecord({
-                matricula: checkoutMeta.matricula,
-                cpf: checkoutMeta.cpf,
-                phone: checkoutMeta.phone,
-                subtotalAmount: checkoutMeta.subtotalAmount,
-                feeAmount: 0,
-                totalAmount: checkoutMeta.totalAmount,
-                installments: 1,
-                paymentMethod: "PIX (Mercado Pago)",
-                mpPaymentId: String(paymentId)
-            });
+            await handleOrderConfirmed(res.data.order);
+        } else if (res.ok && (status === ORDER_STATUS.CANCELLED || status === ORDER_STATUS.REJECTED)) {
+            stopPixPolling();
+            showToast("Este PIX expirou ou foi cancelado. Gere um novo código.", "error");
+            if (byId("pix-qrcode-box")) byId("pix-qrcode-box").classList.add("hidden");
+            if (byId("btn-submit-payment")) byId("btn-submit-payment").classList.remove("hidden");
         } else if (!silent) {
             showToast("O banco ainda aguarda a confirmação do PIX. Assim que pagar no app do banco, aguarde alguns segundos!", "error");
         }
     } catch (err) {
         if (!silent) showToast("Verificando status com o Mercado Pago...", "error");
     }
+}
+
+function upsertOrderLocally(order) {
+    if (!order || !order.orderId) return;
+    const next = [];
+    let replaced = false;
+    for (let i = 0; i < ordersList.length; i++) {
+        if (ordersList[i].orderId === order.orderId) {
+            next.push(Object.assign({}, ordersList[i], order));
+            replaced = true;
+        } else {
+            next.push(ordersList[i]);
+        }
+    }
+    if (!replaced) next.unshift(order);
+    ordersList = next;
 }
 
 // ============================================================================
@@ -1019,14 +1144,14 @@ function showOrderReceiptModal(order) {
         const nStr = item.customName ? item.customName : "-";
         const numStr = item.customNumber ? item.customNumber : "-";
         const customStr = (item.customName || item.customNumber)
-            ? '<span class="block text-[11px] text-[#8A9A4A] font-bold">Personalização: ' + nStr + ' • Nº ' + numStr + '</span>'
+            ? '<span class="block text-[11px] text-[#8A9A4A] font-bold">Personalização: ' + esc(nStr) + ' • Nº ' + esc(numStr) + '</span>'
             : "";
         const itemSubtotal = formatPrice(Number(item.price) * Number(item.quantity));
 
         itemRows.push(
             '<div class="flex justify-between items-start py-1.5 border-b border-gray-200/70">' +
                 '<div>' +
-                    '<strong class="text-gray-800">' + item.quantity + 'x ' + item.name + ' (Tam: ' + item.size + ')</strong>' +
+                    '<strong class="text-gray-800">' + Number(item.quantity) + 'x ' + esc(item.name) + ' (Tam: ' + esc(item.size) + ')</strong>' +
                     customStr +
                 '</div>' +
                 '<span class="font-bold text-furiozo-dark">' + itemSubtotal + '</span>' +
@@ -1036,12 +1161,12 @@ function showOrderReceiptModal(order) {
 
     box.innerHTML =
         '<div class="flex justify-between items-center border-b border-gray-200 pb-2 mb-2">' +
-            '<span class="font-black text-furiozo-dark uppercase">Pedido #' + order.orderId + '</span>' +
-            '<span class="bg-green-100 text-green-800 font-black px-2 py-0.5 rounded text-[10px] uppercase">' + order.status + '</span>' +
+            '<span class="font-black text-furiozo-dark uppercase">Pedido #' + esc(order.orderId) + '</span>' +
+            '<span class="' + statusBadgeClass(order.status) + ' font-black px-2 py-0.5 rounded text-[10px] uppercase">' + esc(order.status) + '</span>' +
         '</div>' +
-        '<p><strong>Aluno:</strong> ' + order.customerName + '</p>' +
-        '<p><strong>Matrícula UERJ:</strong> <span class="font-mono">' + order.customerMatricula + '</span></p>' +
-        '<p><strong>Pagamento:</strong> ' + order.paymentMethod + '</p>' +
+        '<p><strong>Aluno:</strong> ' + esc(order.customerName) + '</p>' +
+        '<p><strong>Matrícula UERJ:</strong> <span class="font-mono">' + esc(order.customerMatricula) + '</span></p>' +
+        '<p><strong>Pagamento:</strong> ' + esc(order.paymentMethod) + '</p>' +
         '<div class="mt-2 pt-2 border-t border-gray-200">' + itemRows.join("") + '</div>' +
         '<div class="flex justify-between items-center pt-2 text-sm font-black text-furiozo-dark">' +
             '<span>TOTAL PAGO:</span>' +
@@ -1058,69 +1183,44 @@ function showOrderReceiptModal(order) {
     if (emailBtn) {
         emailBtn.onclick = function () {
             const subject = "Confirmação de Pedido #" + order.orderId + " - Atlética FurioZOs";
-            window.location.href = "mailto:" + order.customerEmail + "?cc=" + MERCADO_PAGO_CONFIG.atleticaEmail + "&subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(msgText);
+            window.location.href = "mailto:" + encodeURIComponent(order.customerEmail ? order.customerEmail : "") +
+                "?cc=" + encodeURIComponent(MERCADO_PAGO_CONFIG.atleticaEmail) +
+                "&subject=" + encodeURIComponent(subject) +
+                "&body=" + encodeURIComponent(msgText);
         };
     }
 
     showModal("receipt");
 }
 
-async function finalizeOrderRecord(params) {
-    const uName = (currentUser && currentUser.displayName)
-        ? currentUser.displayName
-        : (userProfile.name ? userProfile.name : "Aluno FurioZOs");
-    const uEmail = (currentUser && currentUser.email) ? currentUser.email : "sem-email@furiozos.com";
+// Chamado SOMENTE depois que o Worker confirmou o pagamento no Mercado Pago
+async function handleOrderConfirmed(order) {
+    if (!order || !order.orderId || confirmedOrderIds.has(order.orderId)) return;
+    confirmedOrderIds.add(order.orderId);
 
-    const newOrder = {
-        orderId: "FZ-" + Date.now().toString().slice(-6),
-        mpPaymentId: params.mpPaymentId ? params.mpPaymentId : "",
-        userId: currentUser ? currentUser.uid : "guest",
-        customerName: uName,
-        customerEmail: uEmail,
-        customerPhone: params.phone,
-        customerCpf: params.cpf,
-        customerMatricula: params.matricula,
-        items: cart.slice(),
-        subtotal: params.subtotalAmount,
-        installmentFee: params.feeAmount ? params.feeAmount : 0,
-        installments: params.installments ? params.installments : 1,
-        total: params.totalAmount,
-        paymentMethod: params.paymentMethod,
-        status: "Pago / Confirmado",
-        createdAtISO: new Date().toISOString()
-    };
+    upsertOrderLocally(order);
+    cart = [];
+    await saveCartData();
+    updateCartUI();
+    closeModal("checkout");
 
-    try {
-        for (let i = 0; i < cart.length; i++) {
-            const item = cart[i];
-            if (item.deliveryMode === "imediata") {
-                for (let j = 0; j < productsCatalog.length; j++) {
-                    if (productsCatalog[j].id === item.id) {
-                        const curStock = productsCatalog[j].immediateStock ? Number(productsCatalog[j].immediateStock) : 0;
-                        productsCatalog[j].immediateStock = Math.max(0, curStock - Number(item.quantity));
-                        await saveProductToFirestore(productsCatalog[j]);
-                        break;
-                    }
-                }
-            }
-        }
+    await loadInitialData();
+    renderProducts();
+    updateBatchCountersUI();
 
-        await saveOrderToFirestore(newOrder);
+    showToast("Pagamento aprovado! Pedido #" + order.orderId + " confirmado.");
+    setTimeout(function () {
+        showOrderReceiptModal(order);
+    }, 250);
+}
 
-        cart = [];
-        await saveCartData();
-        updateCartUI();
-        closeModal("checkout");
-        renderProducts();
-        updateBatchCountersUI();
-        showToast("Pagamento aprovado! Pedido #" + newOrder.orderId + " confirmado.");
-        setTimeout(function () {
-            showOrderReceiptModal(newOrder);
-        }, 250);
-    } catch (error) {
-        console.error("Erro ao registrar pedido:", error);
-        showToast("Erro ao salvar pedido no banco.", "error");
-    }
+async function handleOrderUnderReview(order) {
+    if (order) upsertOrderLocally(order);
+    cart = [];
+    await saveCartData();
+    updateCartUI();
+    closeModal("checkout");
+    showToast("Pagamento em análise pelo Mercado Pago. Acompanhe em Meu Perfil > Pedidos.");
 }
 
 // ============================================================================
@@ -1132,7 +1232,9 @@ async function loadInitialData() {
         const productsCol = collection(db, "artifacts", appId, "public", "data", "products");
         const snap = await getDocs(productsCol);
         if (!snap.empty) {
-            productsCatalog = snap.docs.map(function (d) { return d.data(); });
+            productsCatalog = snap.docs.map(function (d) { return Object.assign({}, d.data(), { id: d.id }); });
+            refreshCartPrices();
+            updateCartUI();
             renderProducts();
         } else if (isCurrentUserAdmin()) {
             for (let i = 0; i < DEFAULT_PRODUCTS.length; i++) {
@@ -1144,9 +1246,19 @@ async function loadInitialData() {
         console.warn("Catálogo padrão ativo:", err);
     }
 
+    if (!isRegisteredUser()) {
+        ordersList = [];
+        updateBatchCountersUI();
+        return;
+    }
+
     try {
         const ordersCol = collection(db, "artifacts", appId, "public", "data", "orders");
-        const ordersSnap = await getDocs(ordersCol);
+        // Admin ve todos; usuario comum so os proprios (exigido pelas regras)
+        const ordersQuery = isCurrentUserAdmin()
+            ? ordersCol
+            : query(ordersCol, where("userId", "==", currentUser.uid));
+        const ordersSnap = await getDocs(ordersQuery);
         ordersList = ordersSnap.docs
             .map(function (d) { return Object.assign({ id: d.id }, d.data()); })
             .sort(function (a, b) {
@@ -1172,29 +1284,30 @@ async function saveProductToFirestore(product) {
     await setDoc(prodRef, product, { merge: true });
 }
 
-async function saveOrderToFirestore(order) {
-    ordersList.unshift(order);
-    if (!db) return;
-    const ordersCol = collection(db, "artifacts", appId, "public", "data", "orders");
-    await addDoc(ordersCol, Object.assign({}, order, { createdAt: serverTimestamp() }));
+function getCartLocalKey() {
+    return isRegisteredUser() ? ("furiozos_cart_" + currentUser.uid) : "furiozos_cart_guest";
 }
 
 async function loadCartData() {
-    const localKey = currentUser ? ("furiozos_cart_" + currentUser.uid) : "furiozos_cart_guest";
+    const localKey = getCartLocalKey();
+    cart = [];
     try {
         const localSaved = localStorage.getItem(localKey);
         if (localSaved) {
-            cart = JSON.parse(localSaved);
-            updateCartUI();
+            const parsed = JSON.parse(localSaved);
+            if (Array.isArray(parsed)) cart = parsed;
         }
     } catch (e) {}
+    refreshCartPrices();
+    updateCartUI();
 
-    if (!db || !currentUser) return;
+    if (!db || !isRegisteredUser()) return;
     try {
         const cartRef = doc(db, "artifacts", appId, "users", currentUser.uid, "cart", "current");
         const docSnap = await getDoc(cartRef);
-        if (docSnap.exists() && docSnap.data().items) {
+        if (docSnap.exists() && Array.isArray(docSnap.data().items)) {
             cart = docSnap.data().items;
+            refreshCartPrices();
             localStorage.setItem(localKey, JSON.stringify(cart));
             updateCartUI();
         }
@@ -1204,12 +1317,12 @@ async function loadCartData() {
 }
 
 async function saveCartData() {
-    const localKey = currentUser ? ("furiozos_cart_" + currentUser.uid) : "furiozos_cart_guest";
+    const localKey = getCartLocalKey();
     try {
         localStorage.setItem(localKey, JSON.stringify(cart));
     } catch (e) {}
 
-    if (!db || !currentUser) return;
+    if (!db || !isRegisteredUser()) return;
     try {
         const cartRef = doc(db, "artifacts", appId, "users", currentUser.uid, "cart", "current");
         await setDoc(cartRef, { items: cart, updatedAt: serverTimestamp() }, { merge: true });
@@ -1219,7 +1332,7 @@ async function saveCartData() {
 }
 
 async function loadUserProfileData() {
-    if (!currentUser || currentUser.isAnonymous || !db) return;
+    if (!isRegisteredUser() || !db) return;
     try {
         const profRef = doc(db, "artifacts", appId, "users", currentUser.uid, "cart", "profile");
         const snap = await getDoc(profRef);
@@ -1241,20 +1354,16 @@ async function loadUserProfileData() {
 }
 
 async function saveUserProfileData() {
-    if (!currentUser || currentUser.isAnonymous || !db) return;
-    try {
-        const profRef = doc(db, "artifacts", appId, "users", currentUser.uid, "cart", "profile");
-        await setDoc(profRef, Object.assign({}, userProfile, { updatedAt: serverTimestamp() }), { merge: true });
-    } catch (err) {
-        console.warn("Erro ao salvar perfil:", err);
-    }
+    if (!isRegisteredUser() || !db) return;
+    const profRef = doc(db, "artifacts", appId, "users", currentUser.uid, "cart", "profile");
+    await setDoc(profRef, Object.assign({}, userProfile, { updatedAt: serverTimestamp() }), { merge: true });
 }
 
 // ============================================================================
 // 10. MODAL MEU PERFIL E MEUS PEDIDOS
 // ============================================================================
 function openProfileModal() {
-    if (!currentUser || currentUser.isAnonymous) {
+    if (!isRegisteredUser()) {
         openAuthModal();
         return;
     }
@@ -1294,10 +1403,10 @@ window.switchProfileTab = function (tab) {
 
 function renderUserOrdersHistory() {
     const container = byId("profile-orders-panel");
-    if (!container || !currentUser) return;
+    if (!container || !isRegisteredUser()) return;
 
     const myOrders = ordersList.filter(function (o) {
-        return o.userId === currentUser.uid || o.customerEmail === currentUser.email;
+        return o.userId === currentUser.uid;
     });
 
     if (myOrders.length === 0) {
@@ -1320,24 +1429,28 @@ function renderUserOrdersHistory() {
             const nVal = it.customName ? it.customName : "-";
             const numVal = it.customNumber ? it.customNumber : "-";
             const customTag = (it.customName || it.customNumber)
-                ? " [Nome: " + nVal + " / Nº: " + numVal + "]"
+                ? " [Nome: " + esc(nVal) + " / Nº: " + esc(numVal) + "]"
                 : "";
-            itemLines.push('<div class="text-xs text-gray-700">• <strong>' + it.quantity + 'x ' + it.name + '</strong> (Tam: ' + it.size + ')' + customTag + '</div>');
+            itemLines.push('<div class="text-xs text-gray-700">• <strong>' + Number(it.quantity) + 'x ' + esc(it.name) + '</strong> (Tam: ' + esc(it.size) + ')' + customTag + '</div>');
         }
+
+        const receiptBtn = o.status === ORDER_STATUS.PAID
+            ? '<button type="button" data-order-id="' + esc(o.orderId) + '" class="text-xs font-bold text-green-700 hover:underline flex items-center gap-1">' +
+                  '<i class="fa-brands fa-whatsapp"></i> Ver Comprovante' +
+              '</button>'
+            : "";
 
         html.push(
             '<div class="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2">' +
                 '<div class="flex justify-between items-center">' +
-                    '<span class="font-sport font-black text-sm text-furiozo-dark">Pedido #' + o.orderId + '</span>' +
-                    '<span class="bg-green-100 text-green-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">' + o.status + '</span>' +
+                    '<span class="font-sport font-black text-sm text-furiozo-dark">Pedido #' + esc(o.orderId) + '</span>' +
+                    '<span class="' + statusBadgeClass(o.status) + ' text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">' + esc(o.status) + '</span>' +
                 '</div>' +
-                '<p class="text-[11px] text-gray-500">' + dateStr + ' • ' + o.paymentMethod + '</p>' +
+                '<p class="text-[11px] text-gray-500">' + esc(dateStr) + ' • ' + esc(o.paymentMethod) + '</p>' +
                 '<div class="space-y-1 pt-1 border-t border-gray-200">' + itemLines.join("") + '</div>' +
                 '<div class="flex justify-between items-center pt-2 border-t border-gray-200">' +
                     '<span class="font-black text-furiozo-dark text-sm">Total: ' + formatPrice(o.total) + '</span>' +
-                    '<button type="button" onclick="window.reopenOrderReceipt(\'' + o.orderId + '\')" class="text-xs font-bold text-green-700 hover:underline flex items-center gap-1">' +
-                        '<i class="fa-brands fa-whatsapp"></i> Ver Comprovante' +
-                    '</button>' +
+                    receiptBtn +
                 '</div>' +
             '</div>'
         );
@@ -1362,12 +1475,17 @@ window.reopenOrderReceipt = function (orderId) {
 // ============================================================================
 // 11. PAINEL DA DIRETORIA (ADMIN) E EXPORTACAO EXCEL (.XLSX)
 // ============================================================================
+function getPaidOrders() {
+    return ordersList.filter(function (o) { return o.status === ORDER_STATUS.PAID; });
+}
+
 function calculateBatchMetrics() {
     let totalShirtsInBatch = 0;
     let totalRevenue = 0;
+    const paidOrders = getPaidOrders();
 
-    for (let i = 0; i < ordersList.length; i++) {
-        const order = ordersList[i];
+    for (let i = 0; i < paidOrders.length; i++) {
+        const order = paidOrders[i];
         totalRevenue += Number(order.total ? order.total : 0);
         const itemsArr = order.items ? order.items : [];
         for (let j = 0; j < itemsArr.length; j++) {
@@ -1378,7 +1496,7 @@ function calculateBatchMetrics() {
         }
     }
 
-    return { totalShirtsInBatch: totalShirtsInBatch, totalRevenue: totalRevenue, totalOrders: ordersList.length };
+    return { totalShirtsInBatch: totalShirtsInBatch, totalRevenue: totalRevenue, totalOrders: paidOrders.length };
 }
 
 function updateBatchCountersUI() {
@@ -1423,29 +1541,30 @@ function renderAdminPanel() {
         const prodRows = [];
         for (let i = 0; i < productsCatalog.length; i++) {
             const p = productsCatalog[i];
+            const pid = esc(p.id);
             const selDisp = p.status === "disponivel" ? "selected" : "";
             const selBreve = p.status === "em_breve" ? "selected" : "";
             const selEsg = p.status === "esgotado" ? "selected" : "";
-            const stVal = p.immediateStock ? p.immediateStock : 0;
+            const stVal = p.immediateStock ? Number(p.immediateStock) : 0;
 
             prodRows.push(
                 '<tr class="hover:bg-gray-50">' +
-                    '<td class="py-3 px-3 font-bold text-furiozo-dark">' + p.name + '</td>' +
+                    '<td class="py-3 px-3 font-bold text-furiozo-dark">' + esc(p.name) + '</td>' +
                     '<td class="py-3 px-3">' +
-                        '<select id="admin-status-' + p.id + '" class="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold bg-white">' +
+                        '<select id="admin-status-' + pid + '" class="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold bg-white">' +
                             '<option value="disponivel" ' + selDisp + '>Disponível p/ Compra</option>' +
                             '<option value="em_breve" ' + selBreve + '>Selo "EM BREVE" (Ocultar Preço)</option>' +
                             '<option value="esgotado" ' + selEsg + '>Esgotado</option>' +
                         '</select>' +
                     '</td>' +
                     '<td class="py-3 px-3">' +
-                        '<input type="number" step="0.50" id="admin-price-' + p.id + '" value="' + p.price + '" class="w-24 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold">' +
+                        '<input type="number" step="0.50" id="admin-price-' + pid + '" value="' + Number(p.price) + '" class="w-24 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold">' +
                     '</td>' +
                     '<td class="py-3 px-3">' +
-                        '<input type="number" min="0" id="admin-stock-' + p.id + '" value="' + stVal + '" class="w-20 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-center">' +
+                        '<input type="number" min="0" id="admin-stock-' + pid + '" value="' + stVal + '" class="w-20 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-center">' +
                     '</td>' +
                     '<td class="py-3 px-3 text-right">' +
-                        '<button type="button" onclick="window.saveAdminProduct(\'' + p.id + '\')" class="bg-furiozo-dark text-[#ccff00] hover:bg-[#ccff00] hover:text-furiozo-dark font-black px-3 py-1.5 rounded-lg text-xs uppercase transition-all">' +
+                        '<button type="button" data-admin-save="' + pid + '" class="bg-furiozo-dark text-[#ccff00] hover:bg-[#ccff00] hover:text-furiozo-dark font-black px-3 py-1.5 rounded-lg text-xs uppercase transition-all">' +
                             'Salvar' +
                         '</button>' +
                     '</td>' +
@@ -1473,9 +1592,9 @@ function renderAdminPanel() {
                     const nVal = it.customName ? it.customName : "-";
                     const numVal = it.customNumber ? it.customNumber : "-";
                     const customStr = (it.customName || it.customNumber)
-                        ? " [Nome: <strong>" + nVal + "</strong> / Nº: <strong>" + numVal + "</strong>]"
+                        ? " [Nome: <strong>" + esc(nVal) + "</strong> / Nº: <strong>" + esc(numVal) + "</strong>]"
                         : " [Sem personalização]";
-                    itemSummaries.push('<div class="text-xs mb-1"><strong>' + it.quantity + 'x ' + it.name + '</strong> (Tam: ' + it.size + ')' + customStr + '</div>');
+                    itemSummaries.push('<div class="text-xs mb-1"><strong>' + Number(it.quantity) + 'x ' + esc(it.name) + '</strong> (Tam: ' + esc(it.size) + ')' + customStr + '</div>');
 
                     if (it.deliveryMode === "imediata") {
                         modeSummaries.push('<span class="inline-block bg-[#ccff00] text-furiozo-dark text-[10px] font-black px-2 py-0.5 rounded uppercase">Pronta Entrega</span>');
@@ -1487,18 +1606,21 @@ function renderAdminPanel() {
                 const oId = o.orderId ? o.orderId : "-";
                 const matVal = o.customerMatricula ? o.customerMatricula : (o.customerCourse ? o.customerCourse : "-");
                 const payVal = o.paymentMethod ? o.paymentMethod : "PIX";
+                const noteHTML = o.adminNote
+                    ? '<br><span class="text-[10px] text-red-600 font-bold">' + esc(o.adminNote) + '</span>'
+                    : "";
 
                 ordRows.push(
                     '<tr class="hover:bg-gray-50 align-top">' +
-                        '<td class="py-3 px-2 text-xs text-gray-500 font-mono"><strong>#' + oId + '</strong><br>' + dateFormatted + '</td>' +
+                        '<td class="py-3 px-2 text-xs text-gray-500 font-mono"><strong>#' + esc(oId) + '</strong><br>' + esc(dateFormatted) + '</td>' +
                         '<td class="py-3 px-2 text-xs">' +
-                            '<strong class="text-gray-800">' + o.customerName + '</strong><br>' +
-                            '<span class="font-mono text-[11px] text-furiozo-dark font-bold">Mat: ' + matVal + '</span><br>' +
-                            '<span class="text-gray-500">' + o.customerPhone + '</span>' +
+                            '<strong class="text-gray-800">' + esc(o.customerName) + '</strong><br>' +
+                            '<span class="font-mono text-[11px] text-furiozo-dark font-bold">Mat: ' + esc(matVal) + '</span><br>' +
+                            '<span class="text-gray-500">' + esc(o.customerPhone) + '</span>' +
                         '</td>' +
                         '<td class="py-3 px-2">' + itemSummaries.join("") + '</td>' +
                         '<td class="py-3 px-2">' + modeSummaries.join("<br>") + '</td>' +
-                        '<td class="py-3 px-2 text-xs font-bold text-teal-700">' + payVal + '<br><span class="text-[10px] text-green-600 uppercase">' + o.status + '</span></td>' +
+                        '<td class="py-3 px-2 text-xs font-bold text-teal-700">' + esc(payVal) + '<br><span class="text-[10px] ' + statusTextClass(o.status) + ' uppercase">' + esc(o.status) + '</span>' + noteHTML + '</td>' +
                         '<td class="py-3 px-2 font-black text-furiozo-dark text-sm">' + formatPrice(o.total) + '</td>' +
                     '</tr>'
                 );
@@ -1510,13 +1632,7 @@ function renderAdminPanel() {
 
 window.saveAdminProduct = async function (productId) {
     if (!isCurrentUserAdmin()) return;
-    let prod = null;
-    for (let i = 0; i < productsCatalog.length; i++) {
-        if (productsCatalog[i].id === productId) {
-            prod = productsCatalog[i];
-            break;
-        }
-    }
+    const prod = findProduct(productId);
     if (!prod) return;
 
     const statusEl = byId("admin-status-" + productId);
@@ -1528,14 +1644,19 @@ window.saveAdminProduct = async function (productId) {
     const rawStock = parseInt(stockEl ? stockEl.value : "0", 10);
     const newStock = isNaN(rawStock) ? 0 : rawStock;
 
-    prod.status = newStatus;
-    if (!isNaN(newPrice) && newPrice >= 0) prod.price = newPrice;
+    if (PRODUCT_STATUSES.indexOf(newStatus) !== -1) prod.status = newStatus;
+    if (!isNaN(newPrice) && newPrice > 0) prod.price = Number(newPrice.toFixed(2));
     prod.immediateStock = Math.max(0, newStock);
 
-    await saveProductToFirestore(prod);
-    renderProducts();
-    renderAdminPanel();
-    showToast('Produto "' + prod.name + '" atualizado na vitrine!');
+    try {
+        await saveProductToFirestore(prod);
+        renderProducts();
+        renderAdminPanel();
+        showToast('Produto "' + prod.name + '" atualizado na vitrine!');
+    } catch (err) {
+        console.error("Erro ao salvar produto:", err);
+        showToast("Sem permissão para salvar. Confira se sua conta está na lista de admins.", "error");
+    }
 };
 
 // ============================================================================
@@ -1642,7 +1763,7 @@ function setAuthMode(mode) {
 }
 
 function updateAuthUI() {
-    const isGuest = !currentUser || currentUser.isAnonymous;
+    const isGuest = !isRegisteredUser();
     const btnLoginNav = byId("btn-login-nav");
     const userInfoNav = byId("user-info-nav");
     const usernameSpan = byId("nav-username");
@@ -1694,7 +1815,52 @@ function updateAuthUI() {
 // ============================================================================
 // 13. INICIALIZACAO DE EVENTOS E SISTEMA
 // ============================================================================
+function bindDelegatedEvents() {
+    // Vitrine: imagem, titulo e botao de cada card
+    on("product-grid", "click", function (e) {
+        const target = e.target.closest("[data-product-id]");
+        if (!target) return;
+        const p = findProduct(target.getAttribute("data-product-id"));
+        if (p && p.status === "disponivel") {
+            window.openProductModal(p.id);
+        } else {
+            window.notifyUnavailableProduct(p ? p.status : "em_breve");
+        }
+    });
+
+    // Tamanhos no modal de produto
+    on("size-options", "click", function (e) {
+        const btn = e.target.closest("[data-size]");
+        if (btn) window.selectSize(btn.getAttribute("data-size"), btn);
+    });
+
+    // Carrinho: remover / aumentar / diminuir
+    on("cart-items-container", "click", function (e) {
+        const btn = e.target.closest("[data-cart-action]");
+        if (!btn) return;
+        const id = btn.getAttribute("data-cart-id");
+        const action = btn.getAttribute("data-cart-action");
+        if (action === "remove") window.removeFromCart(id);
+        else if (action === "inc") window.updateQuantity(id, 1);
+        else if (action === "dec") window.updateQuantity(id, -1);
+    });
+
+    // Historico: reabrir comprovante
+    on("profile-orders-panel", "click", function (e) {
+        const btn = e.target.closest("[data-order-id]");
+        if (btn) window.reopenOrderReceipt(btn.getAttribute("data-order-id"));
+    });
+
+    // Painel admin: salvar produto
+    on("admin-products-tbody", "click", function (e) {
+        const btn = e.target.closest("[data-admin-save]");
+        if (btn) window.saveAdminProduct(btn.getAttribute("data-admin-save"));
+    });
+}
+
 function bindAllEvents() {
+    bindDelegatedEvents();
+
     ["checkout-cpf", "profile-cpf"].forEach(function (id) {
         on(id, "input", function (e) { e.target.value = maskCPF(e.target.value); });
     });
@@ -1712,7 +1878,7 @@ function bindAllEvents() {
 
     on("qty-plus", "click", function () {
         const input = byId("qty-input");
-        if (input && parseInt(input.value, 10) < 10) input.value = String(parseInt(input.value, 10) + 1);
+        if (input && parseInt(input.value, 10) < MAX_QTY_PER_ITEM) input.value = String(parseInt(input.value, 10) + 1);
     });
     on("qty-minus", "click", function () {
         const input = byId("qty-input");
@@ -1792,24 +1958,30 @@ function bindAllEvents() {
         }
         try {
             await sendPasswordResetEmail(auth, email);
-            showToast("Link de redefinição enviado para " + email + "! Verifique sua caixa de entrada e spam.");
-            if (errEl) errEl.classList.add("hidden");
         } catch (err) {
-            if (errEl) {
-                errEl.classList.remove("hidden");
-                errEl.textContent = "Não foi possível enviar o e-mail de recuperação. Verifique o endereço digitado.";
-            }
+            console.warn("Reset de senha:", err && err.code ? err.code : err);
         }
+        // Mensagem neutra: nao revela se o e-mail esta cadastrado
+        showToast("Se o e-mail estiver cadastrado, você receberá o link de redefinição. Verifique também o spam.");
+        if (errEl) errEl.classList.add("hidden");
     });
 
     on("auth-form", "submit", async function (e) {
         e.preventDefault();
         const email = byId("auth-email") ? byId("auth-email").value.trim() : "";
         const pass = byId("auth-pass") ? byId("auth-pass").value : "";
-        const name = byId("auth-name") ? byId("auth-name").value.trim() : "";
+        const name = byId("auth-name") ? byId("auth-name").value.trim().slice(0, 80) : "";
         const matricula = byId("auth-matricula") ? byId("auth-matricula").value.replace(/\D/g, "") : "";
         const btn = byId("btn-auth-submit");
         const authError = byId("auth-error");
+
+        if (authMode !== "login" && pass.length < 8) {
+            if (authError) {
+                authError.classList.remove("hidden");
+                authError.textContent = "A senha deve ter pelo menos 8 caracteres.";
+            }
+            return;
+        }
 
         if (btn) {
             btn.disabled = true;
@@ -1824,19 +1996,26 @@ function bindAllEvents() {
             } else {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
                 await updateProfile(userCredential.user, { displayName: name });
+                currentUser = userCredential.user;
                 userProfile = { name: name, matricula: matricula.slice(0, 12), cpf: "", phone: "" };
-                await saveUserProfileData();
+                try {
+                    await saveUserProfileData();
+                } catch (profileErr) {
+                    console.warn("Perfil inicial:", profileErr);
+                }
+                updateAuthUI();
                 showToast("Conta criada com sucesso!");
             }
             closeModal("auth");
         } catch (error) {
-            console.error("Auth Error:", error);
+            console.error("Auth Error:", error && error.code ? error.code : error);
             if (authError) {
                 authError.classList.remove("hidden");
                 if (error.code === "auth/email-already-in-use") authError.textContent = "E-mail já cadastrado.";
                 else if (error.code === "auth/wrong-password" || error.code === "auth/user-not-found" || error.code === "auth/invalid-credential") authError.textContent = "E-mail ou senha incorretos.";
-                else if (error.code === "auth/weak-password") authError.textContent = "A senha deve ter pelo menos 6 caracteres.";
-                else authError.textContent = "Erro ao autenticar: verifique se E-mail/Senha está ativo no Firebase.";
+                else if (error.code === "auth/weak-password" || error.code === "auth/password-does-not-meet-requirements") authError.textContent = "Senha fraca. Use pelo menos 8 caracteres, com letras e números.";
+                else if (error.code === "auth/too-many-requests") authError.textContent = "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
+                else authError.textContent = "Erro ao autenticar. Tente novamente em instantes.";
             }
         } finally {
             if (btn) {
@@ -1848,9 +2027,11 @@ function bindAllEvents() {
 
     const handleLogout = async function () {
         try {
+            stopPixPolling();
             if (auth) await signOut(auth);
             userProfile = { name: "", matricula: "", cpf: "", phone: "" };
-            if (auth) await signInAnonymously(auth);
+            isAdminUser = false;
+            ordersList = [];
             closeModal("admin");
             closeModal("profile");
             showToast("Sessão encerrada.");
@@ -1863,9 +2044,9 @@ function bindAllEvents() {
 
     on("profile-form", "submit", async function (e) {
         e.preventDefault();
-        if (!currentUser || currentUser.isAnonymous) return;
+        if (!isRegisteredUser()) return;
 
-        const name = byId("profile-name") ? byId("profile-name").value.trim() : "";
+        const name = byId("profile-name") ? byId("profile-name").value.trim().slice(0, 80) : "";
         const matricula = byId("profile-matricula") ? byId("profile-matricula").value.replace(/\D/g, "") : "";
         const cpf = byId("profile-cpf") ? byId("profile-cpf").value.trim() : "";
         const phone = byId("profile-phone") ? byId("profile-phone").value.trim() : "";
@@ -1873,6 +2054,14 @@ function bindAllEvents() {
 
         if (matricula && matricula.length !== 12) {
             showToast("A Matrícula UERJ deve ter exatamente 12 dígitos.", "error");
+            return;
+        }
+        if (cpf && !isValidCpf(cpf)) {
+            showToast("CPF inválido. Confira os números digitados.", "error");
+            return;
+        }
+        if (newPass && newPass.length < 8) {
+            showToast("A nova senha deve ter pelo menos 8 caracteres.", "error");
             return;
         }
 
@@ -1883,7 +2072,7 @@ function bindAllEvents() {
             userProfile = { name: name, matricula: matricula, cpf: cpf, phone: phone };
             await saveUserProfileData();
 
-            if (newPass && newPass.length >= 6) {
+            if (newPass) {
                 await updatePassword(currentUser, newPass);
                 if (byId("profile-new-password")) byId("profile-new-password").value = "";
                 showToast("Perfil e nova senha salvos com sucesso!");
@@ -1896,7 +2085,7 @@ function bindAllEvents() {
             if (err.code === "auth/requires-recent-login") {
                 showToast("Para trocar a senha, saia e entre novamente na conta por segurança.", "error");
             } else {
-                showToast("Dados salvos!", "success");
+                showToast("Não foi possível salvar os dados. Tente novamente.", "error");
             }
         }
     });
@@ -1904,7 +2093,7 @@ function bindAllEvents() {
     on("btn-checkout", "click", function () {
         if (cart.length === 0) return;
 
-        if (!currentUser || currentUser.isAnonymous) {
+        if (!isRegisteredUser()) {
             closeCartSidebar();
             openAuthModal();
             showToast("Faça login ou cadastre-se para finalizar o pedido.", "error");
@@ -1912,6 +2101,8 @@ function bindAllEvents() {
         }
 
         stopPixPolling();
+        activeOrderId = null;
+        refreshCartPrices();
         const baseSubtotal = getCartBaseSubtotal();
         buildInstallmentsDropdown(baseSubtotal);
 
@@ -1941,6 +2132,10 @@ function bindAllEvents() {
     on("checkout-form", "submit", async function (e) {
         e.preventDefault();
         if (cart.length === 0) return;
+        if (!isRegisteredUser()) {
+            openAuthModal();
+            return;
+        }
 
         const matricula = byId("checkout-matricula") ? byId("checkout-matricula").value.replace(/\D/g, "") : "";
         const cpf = byId("checkout-cpf") ? byId("checkout-cpf").value.replace(/\D/g, "") : "";
@@ -1950,7 +2145,7 @@ function bindAllEvents() {
             showToast("A Matrícula UERJ deve conter exatamente 12 números (Ex: 202610123456).", "error");
             return;
         }
-        if (cpf.length !== 11) {
+        if (!isValidCpf(cpf)) {
             showToast("Digite um CPF válido com 11 dígitos.", "error");
             return;
         }
@@ -1969,14 +2164,15 @@ function bindAllEvents() {
             cpf: maskCPF(cpf),
             phone: phone
         };
-        await saveUserProfileData();
+        try {
+            await saveUserProfileData();
+        } catch (profileErr) {
+            console.warn("Perfil:", profileErr);
+        }
 
-        const baseSubtotal = getCartBaseSubtotal();
         const btnSubmit = byId("btn-submit-payment");
-        const fullName = fallbackName.trim();
-        const nameParts = fullName.split(" ");
-        const firstName = nameParts[0] ? nameParts[0] : "Aluno";
-        const lastName = nameParts.slice(1).join(" ") ? nameParts.slice(1).join(" ") : "FurioZOs";
+        const customerPayload = { name: fallbackName.trim(), matricula: matricula, cpf: cpf, phone: phone };
+        const itemsPayload = buildCheckoutItems();
 
         if (selectedPaymentMethod === "pix") {
             if (btnSubmit) {
@@ -1985,74 +2181,53 @@ function bindAllEvents() {
             }
 
             try {
-                const payload = {
-                    transaction_amount: Number(baseSubtotal.toFixed(2)),
-                    description: "Pedido Atletica FurioZOs - Matricula " + matricula,
-                    payment_method_id: "pix",
-                    payer: {
-                        email: (currentUser && currentUser.email) ? currentUser.email : "aluno@uerj.br",
-                        first_name: firstName,
-                        last_name: lastName,
-                        identification: {
-                            type: "CPF",
-                            number: cpf
-                        }
-                    }
-                };
+                const res = await callWorker("/checkout", "POST", {
+                    items: itemsPayload,
+                    customer: customerPayload,
+                    payment: { method: "pix" }
+                });
 
-                const res = await callMercadoPagoApi("/v1/payments", "POST", payload);
-                const poi = res.data ? res.data.point_of_interaction : null;
-                const txData = poi ? poi.transaction_data : null;
-
-                if (!res.ok || !txData || !txData.qr_code) {
-                    const detailMsg = translateMpRejectReason(res.data ? res.data.status_detail : "", res.data ? res.data.message : "");
+                const pix = res.data ? res.data.pix : null;
+                if (!res.ok || !pix || !pix.qrCode) {
+                    const detailMsg = translateMpRejectReason(res.data ? res.data.statusDetail : "", res.data ? res.data.message : "");
                     showToast("Não foi possível gerar o PIX: " + detailMsg, "error");
-                    if (btnSubmit) {
-                        btnSubmit.disabled = false;
-                        btnSubmit.textContent = "Gerar QR Code PIX";
-                    }
                     return;
                 }
 
-                activePixPaymentId = res.data.id;
+                activeOrderId = res.data.orderId;
+                if (byId("checkout-total-display")) byId("checkout-total-display").textContent = formatPrice(res.data.total);
+
                 const qrImgEl = byId("pix-qr-img");
                 if (qrImgEl) {
-                    if (txData.qr_code_base64) {
-                        qrImgEl.src = "data:image/png;base64," + txData.qr_code_base64;
+                    if (pix.qrCodeBase64) {
+                        qrImgEl.src = "data:image/png;base64," + pix.qrCodeBase64;
+                        qrImgEl.classList.remove("hidden");
                     } else {
-                        qrImgEl.src = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + encodeURIComponent(txData.qr_code);
+                        // Sem imagem: use apenas o Copia e Cola (nao enviamos o codigo a terceiros)
+                        qrImgEl.removeAttribute("src");
+                        qrImgEl.classList.add("hidden");
                     }
                 }
 
-                if (byId("pix-copia-cola")) byId("pix-copia-cola").value = txData.qr_code;
+                if (byId("pix-copia-cola")) byId("pix-copia-cola").value = pix.qrCode;
                 if (byId("pix-qrcode-box")) byId("pix-qrcode-box").classList.remove("hidden");
                 if (btnSubmit) btnSubmit.classList.add("hidden");
                 showToast("QR Code PIX oficial gerado! Escaneie ou use o Copia e Cola no seu banco.");
 
-                const checkoutMeta = {
-                    matricula: matricula,
-                    cpf: maskCPF(cpf),
-                    phone: phone,
-                    subtotalAmount: baseSubtotal,
-                    feeAmount: 0,
-                    totalAmount: baseSubtotal,
-                    installments: 1
-                };
-
                 stopPixPolling();
                 pixPollingInterval = setInterval(function () {
-                    checkPixPaymentStatus(activePixPaymentId, checkoutMeta, true);
-                }, 4000);
+                    checkOrderStatus(activeOrderId, true);
+                }, 5000);
 
                 const verifyBtn = byId("btn-verify-pix-now");
                 if (verifyBtn) {
                     verifyBtn.onclick = function () {
-                        checkPixPaymentStatus(activePixPaymentId, checkoutMeta, false);
+                        checkOrderStatus(activeOrderId, false);
                     };
                 }
             } catch (err) {
                 console.error("Erro PIX Mercado Pago:", err);
-                showToast("Erro de conexão com o Worker de pagamento. Verifique a URL configurada.", "error");
+                showToast("Erro de conexão com o servidor de pagamento. Tente novamente.", "error");
             } finally {
                 if (btnSubmit) {
                     btnSubmit.disabled = false;
@@ -2075,10 +2250,6 @@ function bindAllEvents() {
                 return;
             }
 
-            const rate = INSTALLMENT_RATES[installments] ? INSTALLMENT_RATES[installments] : 0.0498;
-            const finalCardTotal = Number((baseSubtotal / (1 - rate)).toFixed(2));
-            const feeAmount = Math.max(0, finalCardTotal - baseSubtotal);
-
             if (btnSubmit) {
                 btnSubmit.disabled = true;
                 btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Processando Cartão...';
@@ -2088,11 +2259,15 @@ function bindAllEvents() {
                 if (!mpInstance && typeof window.MercadoPago !== "undefined") {
                     mpInstance = new window.MercadoPago(MERCADO_PAGO_CONFIG.publicKey, { locale: "pt-BR" });
                 }
+                if (!mpInstance) {
+                    showToast("SDK do Mercado Pago ainda carregando. Tente novamente.", "error");
+                    return;
+                }
 
                 // 1. Identifica a bandeira (visa, master, elo, etc.) e banco emissor pelos 6 primeiros digitos
                 const binInfo = await detectCardMethodAndIssuer(cardNumber);
 
-                // 2. Gera o Token seguro do cartao via SDK Mercado Pago
+                // 2. Gera o Token seguro do cartao via SDK Mercado Pago (o numero nunca vai ao nosso servidor)
                 const expYearFull = expYearShort.length === 2 ? ("20" + expYearShort) : expYearShort;
                 const tokenResponse = await mpInstance.createCardToken({
                     cardNumber: cardNumber,
@@ -2106,51 +2281,34 @@ function bindAllEvents() {
 
                 if (!tokenResponse || !tokenResponse.id) {
                     showToast("Dados do cartão inválidos. Verifique número, validade e CVV.", "error");
-                    if (btnSubmit) {
-                        btnSubmit.disabled = false;
-                        btnSubmit.textContent = "Pagar com Cartão";
-                    }
                     return;
                 }
 
-                // 3. Envia a cobranca completa para a API do Mercado Pago via Cloudflare Worker
-                const paymentPayload = {
-                    transaction_amount: finalCardTotal,
-                    token: tokenResponse.id,
-                    description: "Pedido Atletica FurioZOs - Matricula " + matricula,
-                    installments: installments,
-                    payment_method_id: binInfo.paymentMethodId,
-                    issuer_id: binInfo.issuerId,
-                    payer: {
-                        email: (currentUser && currentUser.email) ? currentUser.email : "aluno@uerj.br",
-                        first_name: firstName,
-                        last_name: lastName,
-                        identification: {
-                            type: "CPF",
-                            number: cpf
-                        }
-                    }
-                };
-
-                const res = await callMercadoPagoApi("/v1/payments", "POST", paymentPayload);
-                if (res.ok && res.data && (res.data.status === "approved" || res.data.status === "in_process")) {
-                    await finalizeOrderRecord({
-                        matricula: matricula,
-                        cpf: maskCPF(cpf),
-                        phone: phone,
-                        subtotalAmount: baseSubtotal,
-                        feeAmount: feeAmount,
-                        totalAmount: finalCardTotal,
+                // 3. O Worker recalcula o total, cria o pedido e cobra no Mercado Pago
+                const res = await callWorker("/checkout", "POST", {
+                    items: itemsPayload,
+                    customer: customerPayload,
+                    payment: {
+                        method: "card",
+                        token: tokenResponse.id,
                         installments: installments,
-                        paymentMethod: "Cartão de Crédito (" + installments + "x)",
-                        mpPaymentId: String(res.data.id)
-                    });
+                        paymentMethodId: binInfo.paymentMethodId,
+                        issuerId: binInfo.issuerId ? String(binInfo.issuerId) : ""
+                    }
+                });
+
+                if (!res.ok) {
+                    showToast("Pagamento não processado: " + translateMpRejectReason(res.data ? res.data.statusDetail : "", res.data ? res.data.message : ""), "error");
+                    return;
+                }
+
+                const status = res.data.status;
+                if (status === ORDER_STATUS.PAID) {
+                    await handleOrderConfirmed(res.data.order);
+                } else if (status === ORDER_STATUS.REVIEW || status === ORDER_STATUS.PENDING) {
+                    await handleOrderUnderReview(res.data.order);
                 } else {
-                    const reason = translateMpRejectReason(
-                        res.data ? res.data.status_detail : "",
-                        res.data ? res.data.message : ""
-                    );
-                    showToast("Cartão recusado: " + reason, "error");
+                    showToast("Cartão recusado: " + translateMpRejectReason(res.data.statusDetail, ""), "error");
                 }
             } catch (cardErr) {
                 console.error("Erro no processamento do cartão:", cardErr);
@@ -2202,6 +2360,9 @@ function bindAllEvents() {
             finRow["Valor Total Pago"] = Number(totVal);
             financialRows.push(finRow);
 
+            // A fabrica so recebe itens de pedidos efetivamente pagos
+            if (order.status !== ORDER_STATUS.PAID) continue;
+
             const itemsArr = order.items ? order.items : [];
             for (let j = 0; j < itemsArr.length; j++) {
                 const item = itemsArr[j];
@@ -2216,12 +2377,12 @@ function bindAllEvents() {
                 facRow["Produto"] = item.name ? item.name : "";
                 facRow["Tamanho"] = item.size ? item.size : "Único";
                 facRow["Nome Personalizado (Costas)"] = item.customName ? item.customName : "SEM NOME";
-                facRow["Número (Costas)"] = item.customNumber !== "" ? item.customNumber : "SEM NÚMERO";
+                facRow["Número (Costas)"] = item.customNumber ? item.customNumber : "SEM NÚMERO";
                 facRow["Modalidade Entrega"] = item.deliveryMode === "imediata" ? "PRONTA ENTREGA" : "LOTE (ENCOMENDA)";
                 facRow["Quantidade"] = qtyNum;
                 facRow["Valor Unitário"] = priceNum;
                 facRow["Subtotal Item"] = Number(priceNum * qtyNum);
-                facRow["Status Pagamento"] = order.status ? order.status : "Confirmado";
+                facRow["Status Pagamento"] = order.status;
                 factoryRows.push(facRow);
             }
         }
@@ -2257,30 +2418,29 @@ async function bootstrapApp() {
 
     if (auth) {
         onAuthStateChanged(auth, async function (user) {
-            if (user) {
-                currentUser = user;
+            // Sessoes anonimas da versao antiga sao encerradas: visitantes
+            // navegam sem login e o carrinho fica salvo so no navegador.
+            if (user && user.isAnonymous) {
+                try {
+                    await signOut(auth);
+                } catch (e) {}
+                return;
+            }
+
+            currentUser = user ? user : null;
+            await refreshAdminFlag();
+            if (currentUser) {
                 await loadUserProfileData();
-                updateAuthUI();
-                await loadCartData();
-                await loadInitialData();
             } else {
-                currentUser = null;
-                updateAuthUI();
-                await loadCartData();
+                userProfile = { name: "", matricula: "", cpf: "", phone: "" };
             }
-        });
-
-        try {
-            if (!auth.currentUser) {
-                await signInAnonymously(auth);
-            }
-        } catch (err) {
-            console.warn("Modo visitante local ativo:", err);
+            updateAuthUI();
             await loadCartData();
-        }
+            await loadInitialData();
+        });
+    } else {
+        await loadInitialData();
     }
-
-    await loadInitialData();
 }
 
 bootstrapApp();

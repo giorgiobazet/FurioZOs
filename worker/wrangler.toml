@@ -1,0 +1,14 @@
+name = "furiozos-pagamento"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "atletica-furiozos"
+APP_ID = "furiozos-app"
+ALLOWED_ORIGINS = "https://atletica-furiozos.web.app,https://atletica-furiozos.firebaseapp.com"
+
+# Secrets (NAO coloque aqui). Cadastre com:
+#   npx wrangler secret put MP_ACCESS_TOKEN
+#   npx wrangler secret put GCP_SA_CLIENT_EMAIL
+#   npx wrangler secret put GCP_SA_PRIVATE_KEY
+#   npx wrangler secret put MP_WEBHOOK_SECRET
