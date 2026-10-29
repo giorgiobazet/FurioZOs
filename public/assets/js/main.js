@@ -268,9 +268,9 @@ function findProduct(id) {
 }
 
 function statusBadgeClass(status) {
-    if (status === ORDER_STATUS.PAID) return "bg-green-100 text-green-800";
-    if (status === ORDER_STATUS.PENDING || status === ORDER_STATUS.REVIEW) return "bg-amber-100 text-amber-800";
-    return "bg-red-100 text-red-700";
+    if (status === ORDER_STATUS.PAID) return "bg-[#ccff00] text-ink";
+    if (status === ORDER_STATUS.PENDING || status === ORDER_STATUS.REVIEW) return "bg-amber-400 text-ink";
+    return "bg-red-500 text-white";
 }
 
 function statusTextClass(status) {
@@ -341,61 +341,55 @@ function renderProducts() {
         const isSoldOut = p.status === "esgotado";
         const pid = esc(p.id);
 
-        let topBadge = "";
-        if (p.id === "p2" && isAvailable) {
-            topBadge = '<div class="absolute top-4 left-4 bg-[#ccff00] text-furiozo-dark text-xs font-black px-3 py-1 rounded-full z-20 shadow-md transform -rotate-6">OFICIAL • 1º LOTE</div>';
+        // Selo de disponibilidade no estilo "etiqueta de roupa"
+        let statusTag = "";
+        if (isAvailable) {
+            statusTag = '<span class="label inline-flex items-center gap-2 bg-[#ccff00] text-ink px-2 py-1"><span class="w-1.5 h-1.5 rounded-full bg-ink animate-blink"></span>' + (p.id === "p2" ? "Oficial • 1º Lote" : "Disponível") + '</span>';
         } else if (isComingSoon) {
-            topBadge = '<div class="absolute top-4 right-4 bg-furiozo-dark/90 text-[#ccff00] border border-[#ccff00] text-[11px] font-black px-3 py-1 rounded-full z-20 shadow-md uppercase tracking-wider">Em Breve</div>';
+            statusTag = '<span class="label inline-flex items-center gap-2 border border-bone/40 text-bone px-2 py-1"><i class="fa-solid fa-clock"></i> Em breve</span>';
         } else if (isSoldOut) {
-            topBadge = '<div class="absolute top-4 right-4 bg-red-600 text-white text-[11px] font-black px-3 py-1 rounded-full z-20 shadow-md uppercase tracking-wider">Esgotado</div>';
+            statusTag = '<span class="label inline-flex items-center gap-2 bg-ash text-smoke px-2 py-1 line-through">Esgotado</span>';
         }
 
         let priceAreaHTML = "";
         if (isComingSoon) {
-            priceAreaHTML =
-                '<div class="relative flex items-center">' +
-                    '<span class="font-black text-2xl text-gray-300 blur-[5px] select-none pointer-events-none">' + CURRENCY_PREFIX + '00,00</span>' +
-                    '<span class="absolute left-0 inline-flex items-center gap-1.5 bg-furiozo-dark text-[#ccff00] border-2 border-[#ccff00] px-3.5 py-1.5 rounded-xl font-sport font-black text-xs uppercase tracking-widest shadow-md">' +
-                        '<i class="fa-solid fa-clock"></i> EM BREVE' +
-                    '</span>' +
-                '</div>';
+            priceAreaHTML = '<span class="font-mono text-xl text-smoke blur-[5px] select-none pointer-events-none">' + CURRENCY_PREFIX + '00,00</span>';
         } else if (isSoldOut) {
-            priceAreaHTML =
-                '<span class="inline-flex items-center gap-1.5 bg-red-100 text-red-700 border border-red-300 px-3.5 py-1.5 rounded-xl font-sport font-black text-xs uppercase tracking-widest">' +
-                    'ESGOTADO' +
-                '</span>';
+            priceAreaHTML = '<span class="font-mono text-xl text-smoke line-through">' + formatPrice(p.price) + '</span>';
         } else {
-            priceAreaHTML = '<span class="font-black text-3xl text-gray-900 tracking-tighter">' + formatPrice(p.price) + '</span>';
+            priceAreaHTML = '<span class="font-mono font-semibold text-2xl text-[#ccff00] tracking-tight">' + formatPrice(p.price) + '</span>';
         }
 
         const actionBtnHTML = isAvailable
-            ? '<button type="button" data-product-id="' + pid + '" class="bg-furiozo-dark text-[#ccff00] w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-[#ccff00] group-hover:text-furiozo-dark transition-all shadow-md transform active:scale-95 border border-transparent group-hover:border-furiozo-dark" title="Personalizar e Comprar"><i class="fa-solid fa-plus text-xl"></i></button>'
-            : '<button type="button" data-product-id="' + pid + '" class="bg-gray-200 text-gray-500 w-12 h-12 rounded-full flex items-center justify-center cursor-not-allowed opacity-75" title="Indisponível no momento"><i class="fa-solid fa-lock text-base"></i></button>';
+            ? '<button type="button" data-product-id="' + pid + '" class="bg-[#ccff00] text-ink w-12 h-12 flex items-center justify-center group-hover:bg-bone transition-colors active:scale-95" title="Personalizar e Comprar"><i class="fa-solid fa-arrow-right text-lg group-hover:-rotate-45 transition-transform duration-300"></i></button>'
+            : '<button type="button" data-product-id="' + pid + '" class="border border-ash text-smoke w-12 h-12 flex items-center justify-center cursor-not-allowed" title="Indisponível no momento"><i class="fa-solid fa-lock text-base"></i></button>';
 
-        const cardHoverClass = isAvailable
-            ? "hover:shadow-[0_10px_30px_rgba(204,255,0,0.25)] hover:border-[#ccff00]/60 transform hover:-translate-y-2"
-            : "opacity-85";
+        const cardHoverClass = isAvailable ? "hover:bg-soot hover:border-[#ccff00]/50" : "opacity-80";
         const cursorClass = isAvailable ? "cursor-pointer" : "cursor-not-allowed";
-        const imgEffectClass = isAvailable ? "group-hover:scale-105" : "grayscale-[35%]";
-        const titleHoverClass = isAvailable ? "cursor-pointer group-hover:text-[#8A9A4A]" : "";
+        const imgEffectClass = isAvailable ? "group-hover:scale-105" : "grayscale";
+        const titleHoverClass = isAvailable ? "cursor-pointer group-hover:text-[#ccff00]" : "";
         const customTagHTML = (p.isShirt && isAvailable)
-            ? '<span class="text-[11px] font-bold text-[#8A9A4A] uppercase tracking-wider mt-1"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Personalizável (Nome/Nº)</span>'
+            ? '<span class="label text-furiozo-light"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Personalizável (Nome/Nº)</span>'
             : "";
 
         const imgUrl = (p.images && p.images.length > 0) ? p.images[0] : "assets/img/logo-atletica.jpg";
+        const code = String(i + 1).padStart(3, "0");
 
         htmlList.push(
-            '<div class="bg-white rounded-[2rem] shadow-md overflow-hidden ' + cardHoverClass + ' transition-all duration-300 flex flex-col border-2 border-transparent relative group">' +
-                topBadge +
-                '<div class="relative pb-[100%] ' + cursorClass + ' overflow-hidden bg-gray-100" data-product-id="' + pid + '">' +
-                    '<img src="' + esc(imgUrl) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="' + esc(p.name) + '" class="absolute inset-0 w-full h-full object-cover ' + imgEffectClass + ' transition-transform duration-500">' +
+            '<div class="reveal bg-coal border border-ash ' + cardHoverClass + ' transition-colors duration-500 flex flex-col relative group">' +
+                '<div class="relative pb-[115%] ' + cursorClass + ' overflow-hidden bg-soot" data-product-id="' + pid + '">' +
+                    '<span class="absolute top-3 left-3 z-10 label text-bone mix-blend-difference">' + code + ' / FurioZOs</span>' +
+                    '<span class="absolute top-3 right-3 z-10 w-3 h-3 rounded-full border border-bone/50 bg-ink"></span>' +
+                    '<img src="' + esc(imgUrl) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="' + esc(p.name) + '" class="absolute inset-0 w-full h-full object-cover ' + imgEffectClass + ' transition-transform duration-700">' +
+                    '<span class="absolute inset-x-0 bottom-0 h-1 bg-[#ccff00] origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500 ease-razor"></span>' +
                 '</div>' +
-                '<div class="p-6 flex flex-col flex-grow">' +
-                    '<h3 class="font-sport text-lg text-furiozo-dark font-black uppercase mb-1 flex-grow ' + titleHoverClass + ' transition-colors leading-tight tracking-tight" data-product-id="' + pid + '">' +
+                '<div class="p-5 flex flex-col flex-grow gap-3 border-t border-dashed border-ash">' +
+                    '<div>' + statusTag + '</div>' +
+                    '<h3 class="font-sport text-2xl text-bone font-black uppercase flex-grow ' + titleHoverClass + ' transition-colors leading-none" data-product-id="' + pid + '">' +
                         esc(p.name) +
                     '</h3>' +
                     customTagHTML +
-                    '<div class="flex justify-between items-center mt-4 pt-2 border-t border-gray-100">' +
+                    '<div class="flex justify-between items-center mt-2">' +
                         priceAreaHTML +
                         actionBtnHTML +
                     '</div>' +
@@ -478,13 +472,9 @@ function evaluateDeliveryAndPrice() {
         if (btnImmediate) {
             btnImmediate.disabled = true;
             btnImmediate.classList.add("opacity-50", "cursor-not-allowed");
-            btnImmediate.classList.remove("border-furiozo-dark", "bg-furiozo-accent/40");
-            btnImmediate.classList.add("border-gray-200", "bg-white");
+            btnImmediate.classList.remove("is-active");
         }
-        if (btnBatch) {
-            btnBatch.classList.add("border-furiozo-dark", "bg-furiozo-accent/40");
-            btnBatch.classList.remove("border-gray-200", "bg-white");
-        }
+        if (btnBatch) btnBatch.classList.add("is-active");
 
         if (isCustomized) {
             if (immediateStatusText) immediateStatusText.textContent = "Indisponível para itens com nome/número.";
@@ -503,25 +493,9 @@ function evaluateDeliveryAndPrice() {
         }
         if (ruleNotice) ruleNotice.classList.add("hidden");
 
-        if (selectedDeliveryMode === "imediata") {
-            if (btnImmediate) {
-                btnImmediate.classList.add("border-furiozo-dark", "bg-furiozo-accent/40");
-                btnImmediate.classList.remove("border-gray-200", "bg-white");
-            }
-            if (btnBatch) {
-                btnBatch.classList.remove("border-furiozo-dark", "bg-furiozo-accent/40");
-                btnBatch.classList.add("border-gray-200", "bg-white");
-            }
-        } else {
-            if (btnBatch) {
-                btnBatch.classList.add("border-furiozo-dark", "bg-furiozo-accent/40");
-                btnBatch.classList.remove("border-gray-200", "bg-white");
-            }
-            if (btnImmediate) {
-                btnImmediate.classList.remove("border-furiozo-dark", "bg-furiozo-accent/40");
-                btnImmediate.classList.add("border-gray-200", "bg-white");
-            }
-        }
+        const immediateOn = selectedDeliveryMode === "imediata";
+        if (btnImmediate) btnImmediate.classList.toggle("is-active", immediateOn);
+        if (btnBatch) btnBatch.classList.toggle("is-active", !immediateOn);
     }
 
     const deliveryFee = selectedDeliveryMode === "imediata" ? PRICING_RULES.IMMEDIATE_DELIVERY_FEE : 0;
@@ -591,8 +565,8 @@ window.openProductModal = function (id) {
         const imgs = selectedProduct.images && selectedProduct.images.length > 0 ? selectedProduct.images : ["assets/img/logo-atletica.jpg"];
         for (let i = 0; i < imgs.length; i++) {
             slides.push(
-                '<div class="swiper-slide flex items-center justify-center p-4">' +
-                    '<img src="' + esc(imgs[i]) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="Produto" class="max-w-full max-h-[260px] md:max-h-[380px] object-contain drop-shadow-md rounded-xl">' +
+                '<div class="swiper-slide flex items-center justify-center p-6">' +
+                    '<img src="' + esc(imgs[i]) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="Produto" class="max-w-full max-h-[260px] md:max-h-[420px] object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.5)]">' +
                 '</div>'
             );
         }
@@ -622,7 +596,7 @@ window.openProductModal = function (id) {
         for (let i = 0; i < tamanhos.length; i++) {
             const s = tamanhos[i];
             btns.push(
-                '<button type="button" data-size="' + s + '" class="size-btn px-3 min-w-[2.5rem] h-10 rounded-full border-2 border-gray-300 font-bold text-gray-600 hover:border-[#ccff00] hover:text-furiozo-dark transition-all focus:outline-none flex items-center justify-center text-sm">' +
+                '<button type="button" data-size="' + s + '" class="size-btn">' +
                     s +
                 '</button>'
             );
@@ -649,13 +623,9 @@ window.selectSize = function (size, btnElement) {
     if (byId("size-error")) byId("size-error").classList.add("hidden");
     const allBtns = document.querySelectorAll(".size-btn");
     for (let i = 0; i < allBtns.length; i++) {
-        allBtns[i].classList.remove("bg-[#ccff00]", "text-furiozo-dark", "border-[#ccff00]");
-        allBtns[i].classList.add("border-gray-300", "text-gray-600");
+        allBtns[i].classList.remove("is-active");
     }
-    if (btnElement) {
-        btnElement.classList.remove("border-gray-300", "text-gray-600");
-        btnElement.classList.add("bg-[#ccff00]", "text-furiozo-dark", "border-[#ccff00]");
-    }
+    if (btnElement) btnElement.classList.add("is-active");
 };
 
 // ============================================================================
@@ -687,6 +657,10 @@ function refreshCartPrices() {
     }
 }
 
+// A mensagem de carrinho vazio sai do DOM quando os itens sao renderizados;
+// guardamos a referencia para poder recoloca-la depois.
+let emptyCartMsgEl = null;
+
 function updateCartUI() {
     let totalQty = 0;
     for (let i = 0; i < cart.length; i++) {
@@ -699,7 +673,8 @@ function updateCartUI() {
     if (badgeMob) badgeMob.textContent = String(totalQty);
 
     const container = byId("cart-items-container");
-    const emptyMsg = byId("empty-cart-msg");
+    if (!emptyCartMsgEl) emptyCartMsgEl = byId("empty-cart-msg");
+    const emptyMsg = emptyCartMsgEl;
     const totalEl = byId("cart-total");
 
     if (!container || !totalEl) return;
@@ -726,33 +701,33 @@ function updateCartUI() {
 
         const customBadges = [];
         if (item.customName) {
-            customBadges.push('<span class="bg-furiozo-accent text-furiozo-dark px-2 py-0.5 rounded font-bold text-[10px]">Nome: ' + esc(item.customName) + '</span>');
+            customBadges.push('<span class="label border border-bone/30 text-bone px-1.5 py-0.5">Nome: ' + esc(item.customName) + '</span>');
         }
         if (item.customNumber) {
-            customBadges.push('<span class="bg-furiozo-accent text-furiozo-dark px-2 py-0.5 rounded font-bold text-[10px]">Nº: ' + esc(item.customNumber) + '</span>');
+            customBadges.push('<span class="label border border-bone/30 text-bone px-1.5 py-0.5">Nº ' + esc(item.customNumber) + '</span>');
         }
 
         const deliveryBadge = item.deliveryMode === "imediata"
-            ? '<span class="bg-[#ccff00] text-furiozo-dark px-2 py-0.5 rounded font-black text-[10px] uppercase"><i class="fa-solid fa-bolt mr-1"></i>Pronta Entrega</span>'
-            : '<span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold text-[10px] uppercase">Pedido em Lote</span>';
+            ? '<span class="label bg-[#ccff00] text-ink px-1.5 py-0.5"><i class="fa-solid fa-bolt mr-1"></i>Pronta Entrega</span>'
+            : '<span class="label bg-ash text-smoke px-1.5 py-0.5">Pedido em Lote</span>';
 
         rows.push(
-            '<div class="flex gap-3 bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100">' +
-                '<img src="' + esc(item.img) + '" onerror="this.src=\'https://placehold.co/150x150/1F4229/ccff00?text=FurioZOs\'" class="w-20 h-20 object-cover rounded-xl border border-gray-200 shrink-0">' +
-                '<div class="flex-grow flex flex-col justify-between">' +
+            '<div class="flex gap-3 bg-coal p-3 border border-ash hover:border-[#ccff00]/40 transition-colors">' +
+                '<img src="' + esc(item.img) + '" onerror="this.src=\'https://placehold.co/150x150/1F4229/ccff00?text=FurioZOs\'" class="w-20 h-24 object-cover border border-ash shrink-0">' +
+                '<div class="flex-grow flex flex-col justify-between min-w-0">' +
                     '<div class="flex justify-between items-start gap-2">' +
-                        '<h4 class="font-bold text-sm text-gray-800 leading-tight">' + esc(item.name) + '</h4>' +
-                        '<button type="button" data-cart-action="remove" data-cart-id="' + cid + '" class="text-gray-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>' +
+                        '<h4 class="font-sport font-black uppercase text-xl text-bone leading-none">' + esc(item.name) + '</h4>' +
+                        '<button type="button" data-cart-action="remove" data-cart-id="' + cid + '" class="text-smoke hover:text-red-400 transition-colors" title="Remover"><i class="fa-solid fa-xmark"></i></button>' +
                     '</div>' +
-                    '<p class="text-xs text-gray-500 font-semibold mt-0.5">Tam: <strong class="text-gray-800">' + esc(item.size) + '</strong> • Unit: ' + formatPrice(item.price) + '</p>' +
-                    '<div class="flex flex-wrap gap-1 my-1.5">' + customBadges.join("") + deliveryBadge + '</div>' +
-                    '<div class="flex justify-between items-center mt-1">' +
-                        '<div class="flex items-center border border-gray-200 rounded-lg px-2 py-0.5 bg-gray-50">' +
-                            '<button type="button" data-cart-action="dec" data-cart-id="' + cid + '" class="text-gray-500 hover:text-furiozo-dark px-1"><i class="fa-solid fa-minus text-[10px]"></i></button>' +
-                            '<span class="mx-2 text-xs font-bold w-4 text-center">' + Number(item.quantity) + '</span>' +
-                            '<button type="button" data-cart-action="inc" data-cart-id="' + cid + '" class="text-gray-500 hover:text-furiozo-dark px-1"><i class="fa-solid fa-plus text-[10px]"></i></button>' +
+                    '<p class="label text-smoke mt-1">Tam <strong class="text-bone">' + esc(item.size) + '</strong> • Unit ' + formatPrice(item.price) + '</p>' +
+                    '<div class="flex flex-wrap gap-1 my-2">' + customBadges.join("") + deliveryBadge + '</div>' +
+                    '<div class="flex justify-between items-center">' +
+                        '<div class="flex items-center border border-ash">' +
+                            '<button type="button" data-cart-action="dec" data-cart-id="' + cid + '" class="w-7 h-7 text-smoke hover:text-ink hover:bg-[#ccff00] transition-colors"><i class="fa-solid fa-minus text-[10px]"></i></button>' +
+                            '<span class="w-7 text-center font-mono text-xs text-bone">' + Number(item.quantity) + '</span>' +
+                            '<button type="button" data-cart-action="inc" data-cart-id="' + cid + '" class="w-7 h-7 text-smoke hover:text-ink hover:bg-[#ccff00] transition-colors"><i class="fa-solid fa-plus text-[10px]"></i></button>' +
                         '</div>' +
-                        '<span class="font-black text-furiozo-dark text-sm">' + formatPrice(itemTotal) + '</span>' +
+                        '<span class="font-mono font-semibold text-[#ccff00]">' + formatPrice(itemTotal) + '</span>' +
                     '</div>' +
                 '</div>' +
             '</div>'
@@ -919,7 +894,7 @@ function updateCheckoutTotalsUI() {
 }
 
 window.selectPaymentMethod = function (method) {
-    selectedPaymentMethod = method === "card" ? "card" : "pix";
+    selectedPaymentMethod = (method === "card" || method === "cartao") ? "card" : "pix";
     const tabPix = byId("tab-pay-pix");
     const tabCard = byId("tab-pay-card");
     const panelPix = byId("payment-pix-panel");
@@ -928,8 +903,8 @@ window.selectPaymentMethod = function (method) {
     const qrBox = byId("pix-qrcode-box");
 
     if (selectedPaymentMethod === "pix") {
-        if (tabPix) tabPix.className = "p-4 rounded-2xl border-2 border-furiozo-dark bg-furiozo-accent/50 font-black text-furiozo-dark flex flex-col items-center justify-center gap-1 transition-all shadow-sm";
-        if (tabCard) tabCard.className = "p-4 rounded-2xl border-2 border-gray-200 bg-white font-bold text-gray-600 flex flex-col items-center justify-center gap-1 transition-all";
+        if (tabPix) tabPix.classList.add("is-active");
+        if (tabCard) tabCard.classList.remove("is-active");
         if (panelPix) panelPix.classList.remove("hidden");
         if (panelCard) panelCard.classList.add("hidden");
         if (btnSubmit) {
@@ -941,8 +916,8 @@ window.selectPaymentMethod = function (method) {
             }
         }
     } else {
-        if (tabCard) tabCard.className = "p-4 rounded-2xl border-2 border-furiozo-dark bg-furiozo-accent/50 font-black text-furiozo-dark flex flex-col items-center justify-center gap-1 transition-all shadow-sm";
-        if (tabPix) tabPix.className = "p-4 rounded-2xl border-2 border-gray-200 bg-white font-bold text-gray-600 flex flex-col items-center justify-center gap-1 transition-all";
+        if (tabCard) tabCard.classList.add("is-active");
+        if (tabPix) tabPix.classList.remove("is-active");
         if (panelCard) panelCard.classList.remove("hidden");
         if (panelPix) panelPix.classList.add("hidden");
         if (btnSubmit) {
@@ -1061,7 +1036,7 @@ async function checkOrderStatus(orderId, silent) {
             stopPixPolling();
             const statusInd = byId("pix-status-indicator");
             if (statusInd) {
-                statusInd.innerHTML = '<i class="fa-solid fa-circle-check text-green-600"></i> Pagamento Aprovado pelo Banco!';
+                statusInd.innerHTML = '<i class="fa-solid fa-circle-check text-[#ccff00]"></i> Pagamento Aprovado pelo Banco!';
             }
             await handleOrderConfirmed(res.data.order);
         } else if (res.ok && (status === ORDER_STATUS.CANCELLED || status === ORDER_STATUS.REJECTED)) {
@@ -1149,26 +1124,26 @@ function showOrderReceiptModal(order) {
         const itemSubtotal = formatPrice(Number(item.price) * Number(item.quantity));
 
         itemRows.push(
-            '<div class="flex justify-between items-start py-1.5 border-b border-gray-200/70">' +
+            '<div class="flex justify-between items-start py-1.5 border-b border-ash">' +
                 '<div>' +
-                    '<strong class="text-gray-800">' + Number(item.quantity) + 'x ' + esc(item.name) + ' (Tam: ' + esc(item.size) + ')</strong>' +
+                    '<strong class="text-bone">' + Number(item.quantity) + 'x ' + esc(item.name) + ' (Tam: ' + esc(item.size) + ')</strong>' +
                     customStr +
                 '</div>' +
-                '<span class="font-bold text-furiozo-dark">' + itemSubtotal + '</span>' +
+                '<span class="font-bold text-[#ccff00]">' + itemSubtotal + '</span>' +
             '</div>'
         );
     }
 
     box.innerHTML =
-        '<div class="flex justify-between items-center border-b border-gray-200 pb-2 mb-2">' +
-            '<span class="font-black text-furiozo-dark uppercase">Pedido #' + esc(order.orderId) + '</span>' +
+        '<div class="flex justify-between items-center border-b border-ash pb-2 mb-2">' +
+            '<span class="font-black text-[#ccff00] uppercase">Pedido #' + esc(order.orderId) + '</span>' +
             '<span class="' + statusBadgeClass(order.status) + ' font-black px-2 py-0.5 rounded text-[10px] uppercase">' + esc(order.status) + '</span>' +
         '</div>' +
         '<p><strong>Aluno:</strong> ' + esc(order.customerName) + '</p>' +
         '<p><strong>Matrícula UERJ:</strong> <span class="font-mono">' + esc(order.customerMatricula) + '</span></p>' +
         '<p><strong>Pagamento:</strong> ' + esc(order.paymentMethod) + '</p>' +
-        '<div class="mt-2 pt-2 border-t border-gray-200">' + itemRows.join("") + '</div>' +
-        '<div class="flex justify-between items-center pt-2 text-sm font-black text-furiozo-dark">' +
+        '<div class="mt-2 pt-2 border-t border-ash">' + itemRows.join("") + '</div>' +
+        '<div class="flex justify-between items-center pt-2 text-sm font-black text-[#ccff00]">' +
             '<span>TOTAL PAGO:</span>' +
             '<span class="text-lg">' + formatPrice(order.total) + '</span>' +
         '</div>';
@@ -1388,13 +1363,13 @@ window.switchProfileTab = function (tab) {
     const ordersPanel = byId("profile-orders-panel");
 
     if (tab === "dados") {
-        if (btnData) btnData.className = "flex-1 py-2.5 text-xs font-black uppercase rounded-xl bg-white shadow-sm text-furiozo-dark transition-all";
-        if (btnOrders) btnOrders.className = "flex-1 py-2.5 text-xs font-black uppercase rounded-xl text-gray-500 hover:text-furiozo-dark transition-all";
+        if (btnData) btnData.classList.add("is-active");
+        if (btnOrders) btnOrders.classList.remove("is-active");
         if (formPanel) formPanel.classList.remove("hidden");
         if (ordersPanel) ordersPanel.classList.add("hidden");
     } else {
-        if (btnOrders) btnOrders.className = "flex-1 py-2.5 text-xs font-black uppercase rounded-xl bg-white shadow-sm text-furiozo-dark transition-all";
-        if (btnData) btnData.className = "flex-1 py-2.5 text-xs font-black uppercase rounded-xl text-gray-500 hover:text-furiozo-dark transition-all";
+        if (btnOrders) btnOrders.classList.add("is-active");
+        if (btnData) btnData.classList.remove("is-active");
         if (formPanel) formPanel.classList.add("hidden");
         if (ordersPanel) ordersPanel.classList.remove("hidden");
         renderUserOrdersHistory();
@@ -1411,7 +1386,7 @@ function renderUserOrdersHistory() {
 
     if (myOrders.length === 0) {
         container.innerHTML =
-            '<div class="text-center py-10 text-gray-400">' +
+            '<div class="text-center py-10 text-smoke">' +
                 '<i class="fa-solid fa-bag-shopping text-4xl mb-2"></i>' +
                 '<p class="font-bold text-sm">Você ainda não realizou nenhum pedido.</p>' +
             '</div>';
@@ -1431,25 +1406,25 @@ function renderUserOrdersHistory() {
             const customTag = (it.customName || it.customNumber)
                 ? " [Nome: " + esc(nVal) + " / Nº: " + esc(numVal) + "]"
                 : "";
-            itemLines.push('<div class="text-xs text-gray-700">• <strong>' + Number(it.quantity) + 'x ' + esc(it.name) + '</strong> (Tam: ' + esc(it.size) + ')' + customTag + '</div>');
+            itemLines.push('<div class="text-xs text-bone/80">• <strong>' + Number(it.quantity) + 'x ' + esc(it.name) + '</strong> (Tam: ' + esc(it.size) + ')' + customTag + '</div>');
         }
 
         const receiptBtn = o.status === ORDER_STATUS.PAID
-            ? '<button type="button" data-order-id="' + esc(o.orderId) + '" class="text-xs font-bold text-green-700 hover:underline flex items-center gap-1">' +
+            ? '<button type="button" data-order-id="' + esc(o.orderId) + '" class="text-xs font-bold text-[#ccff00] hover:underline flex items-center gap-1">' +
                   '<i class="fa-brands fa-whatsapp"></i> Ver Comprovante' +
               '</button>'
             : "";
 
         html.push(
-            '<div class="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2">' +
+            '<div class="bg-coal p-4 border border-ash space-y-2">' +
                 '<div class="flex justify-between items-center">' +
-                    '<span class="font-sport font-black text-sm text-furiozo-dark">Pedido #' + esc(o.orderId) + '</span>' +
+                    '<span class="font-sport font-black text-sm text-[#ccff00]">Pedido #' + esc(o.orderId) + '</span>' +
                     '<span class="' + statusBadgeClass(o.status) + ' text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">' + esc(o.status) + '</span>' +
                 '</div>' +
-                '<p class="text-[11px] text-gray-500">' + esc(dateStr) + ' • ' + esc(o.paymentMethod) + '</p>' +
-                '<div class="space-y-1 pt-1 border-t border-gray-200">' + itemLines.join("") + '</div>' +
-                '<div class="flex justify-between items-center pt-2 border-t border-gray-200">' +
-                    '<span class="font-black text-furiozo-dark text-sm">Total: ' + formatPrice(o.total) + '</span>' +
+                '<p class="text-[11px] text-smoke">' + esc(dateStr) + ' • ' + esc(o.paymentMethod) + '</p>' +
+                '<div class="space-y-1 pt-1 border-t border-ash">' + itemLines.join("") + '</div>' +
+                '<div class="flex justify-between items-center pt-2 border-t border-ash">' +
+                    '<span class="font-black text-[#ccff00] text-sm">Total: ' + formatPrice(o.total) + '</span>' +
                     receiptBtn +
                 '</div>' +
             '</div>'
@@ -1744,16 +1719,16 @@ function setAuthMode(mode) {
     if (authError) authError.classList.add("hidden");
 
     if (mode === "login") {
-        if (tabLogin) tabLogin.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-furiozo-dark transition-all";
-        if (tabRegister) tabRegister.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 hover:text-furiozo-dark transition-all bg-transparent";
+        if (tabLogin) tabLogin.classList.add("is-active");
+        if (tabRegister) tabRegister.classList.remove("is-active");
         if (nameField) nameField.classList.add("hidden");
         if (extraFields) extraFields.classList.add("hidden");
         if (authName) authName.removeAttribute("required");
         if (btnSubmit) btnSubmit.textContent = "Entrar";
         if (authTitle) authTitle.textContent = "Acessar Conta";
     } else {
-        if (tabRegister) tabRegister.className = "flex-1 py-2 text-sm font-bold rounded-md bg-white shadow-sm text-furiozo-dark transition-all";
-        if (tabLogin) tabLogin.className = "flex-1 py-2 text-sm font-bold rounded-md text-gray-500 hover:text-furiozo-dark transition-all bg-transparent";
+        if (tabRegister) tabRegister.classList.add("is-active");
+        if (tabLogin) tabLogin.classList.remove("is-active");
         if (nameField) nameField.classList.remove("hidden");
         if (extraFields) extraFields.classList.remove("hidden");
         if (authName) authName.setAttribute("required", "true");
