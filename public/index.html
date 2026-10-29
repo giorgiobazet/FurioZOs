@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="js-reveal">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -95,36 +95,38 @@
                         <i class="fa-solid fa-bag-shopping text-xl"></i>
                         <span id="cart-badge-mobile" class="absolute -top-2 -right-3 bg-neon text-ink text-[11px] font-mono font-bold h-5 min-w-[1.25rem] px-1 flex items-center justify-center">0</span>
                     </button>
-                    <button id="mobile-menu-btn" type="button" class="label text-bone hover:text-neon border border-bone/30 px-3 py-2 focus:outline-none" aria-controls="mobile-menu">
+                    <button id="mobile-menu-btn" type="button" class="label text-bone hover:text-neon border border-bone/30 px-3 py-2.5 min-w-[4.5rem] focus:outline-none" aria-controls="mobile-menu" aria-expanded="false">
                         Menu
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- Mobile Menu: cortina em tela cheia -->
-        <div id="mobile-menu" class="hidden md:hidden fixed inset-x-0 top-16 bottom-0 bg-furiozo-dark z-40 overflow-y-auto" data-lenis-prevent>
-            <div class="absolute inset-0 hatch pointer-events-none"></div>
-            <div class="relative px-4 pt-6 pb-10 flex flex-col min-h-full">
-                <a href="#" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">00</span>Início</a>
-                <a href="#sobre" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">01</span>História</a>
-                <a href="#gestao" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">02</span>Gestão</a>
-                <a href="#produtos" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">03</span>Produtos</a>
-                <div class="mt-auto pt-8 space-y-2">
-                    <button id="btn-admin-mobile" type="button" class="hidden w-full text-left px-4 py-3 label bg-neon/15 text-neon border border-neon">
-                        <i class="fa-solid fa-gauge-high mr-2"></i> Painel Diretoria
+    </nav>
+
+    <!-- Mobile Menu: cortina em tela cheia (fora da <nav> de propósito: o
+         backdrop-filter da navbar prenderia este "fixed" dentro dela) -->
+    <div id="mobile-menu" class="hidden md:hidden fixed inset-x-0 top-16 bottom-0 bg-furiozo-dark z-[45] overflow-y-auto overscroll-contain" data-lenis-prevent>
+        <div class="absolute inset-0 hatch pointer-events-none"></div>
+        <div class="relative px-4 pt-6 pb-10 flex flex-col min-h-full">
+            <a href="#" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">00</span>Início</a>
+            <a href="#sobre" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">01</span>História</a>
+            <a href="#gestao" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">02</span>Gestão</a>
+            <a href="#produtos" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">03</span>Produtos</a>
+            <div class="mt-auto pt-8 space-y-2">
+                <button id="btn-admin-mobile" type="button" class="hidden w-full text-left px-4 py-3 label bg-neon/15 text-neon border border-neon">
+                    <i class="fa-solid fa-gauge-high mr-2"></i> Painel Diretoria
+                </button>
+                <button id="btn-login-mobile" type="button" class="btn-razor btn-razor--solid w-full"><span>Login / Cadastro</span><span class="arrow">→</span></button>
+                <div id="user-info-mobile" class="hidden px-4 py-3 bg-ink/40 border border-neon/30 text-neon font-medium text-sm justify-between items-center">
+                    <button id="btn-profile-mobile" type="button" class="font-bold flex items-center gap-2 text-left">
+                        <i class="fa-solid fa-user-gear"></i> <span id="mobile-username">Meu Perfil</span>
                     </button>
-                    <button id="btn-login-mobile" type="button" class="btn-razor btn-razor--solid w-full"><span>Login / Cadastro</span><span class="arrow">→</span></button>
-                    <div id="user-info-mobile" class="hidden px-4 py-3 bg-ink/40 border border-neon/30 text-neon font-medium text-sm justify-between items-center">
-                        <button id="btn-profile-mobile" type="button" class="font-bold flex items-center gap-2 text-left">
-                            <i class="fa-solid fa-user-gear"></i> <span id="mobile-username">Meu Perfil</span>
-                        </button>
-                        <button id="btn-logout-mobile" type="button" class="text-red-300 bg-red-400/10 px-3 py-1"><i class="fa-solid fa-sign-out-alt"></i> Sair</button>
-                    </div>
+                    <button id="btn-logout-mobile" type="button" class="text-red-300 bg-red-400/10 px-3 py-1"><i class="fa-solid fa-sign-out-alt"></i> Sair</button>
                 </div>
             </div>
         </div>
-    </nav>
+    </div>
 
     <!-- Hero Carousel -->
     <header class="relative w-full min-h-[640px] h-[100svh] max-h-[960px] bg-ink overflow-hidden">
@@ -1012,7 +1014,7 @@
                     <span class="block w-20 h-20 rounded-full overflow-hidden ring-4 ring-neon bg-white mb-6 shadow-[0_0_40px_rgba(204,255,0,0.25)]">
                         <img src="assets/img/logo-atletica.jpg" alt="" class="w-full h-full object-cover scale-[1.22]">
                     </span>
-                    <p class="font-sport font-black uppercase text-5xl leading-[0.85]">Entra<br>pro <span class="text-neon">bando</span></p>
+                    <p class="font-sport font-black uppercase text-5xl leading-[0.85]">Entra<br>pro <span class="text-neon">pântano</span></p>
                     <p class="font-serif italic text-xl text-bone/80 mt-3 leading-tight">Acompanhe seus pedidos e garanta seu manto.</p>
                 </div>
                 <span class="relative label text-bone/50">UERJ · Zona Oeste</span>
@@ -1024,6 +1026,7 @@
                     <div>
                         <span class="label text-smoke">FurioZOs</span>
                         <h2 class="font-sport text-4xl font-black uppercase leading-none mt-1" id="auth-title">Acessar Conta</h2>
+                        <p class="md:hidden font-serif italic text-lg text-bone/70 mt-1">Entra pro <span class="text-neon">pântano</span>.</p>
                     </div>
                     <button id="close-auth" type="button" aria-label="Fechar" class="fz-close shrink-0"><i class="fa-solid fa-xmark"></i></button>
                 </div>
@@ -1064,6 +1067,10 @@
 
     <!-- Efeitos visuais (só apresentação; nenhuma regra de negócio aqui) -->
     <script>
+    // Garantia: se algo falhar no script de efeitos, nada fica escondido.
+    setTimeout(function(){ if (!window.__furiozoReveal) document.documentElement.classList.remove('js-reveal'); }, 4000);
+    </script>
+    <script>
     (function(){
         var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         var nav = document.getElementById('site-nav');
@@ -1090,8 +1097,29 @@
             if (menuBtn) new MutationObserver(function(){
                 var open = !menu.classList.contains('hidden');
                 menuBtn.textContent = open ? 'Fechar' : 'Menu';
+                menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
                 document.documentElement.style.overflow = open ? 'hidden' : '';
+                if (window.furiozoLenis) open ? window.furiozoLenis.stop() : window.furiozoLenis.start();
             }).observe(menu, { attributes: true, attributeFilter: ['class'] });
+        }
+
+        // Revelação ao entrar na tela (IntersectionObserver): funciona em todo
+        // navegador e sempre termina 100% visível, mesmo parando de rolar no meio.
+        var revealSel = '.reveal:not(.is-visible), .reveal-slash:not(.is-visible)';
+        if (reduce || !('IntersectionObserver' in window)) {
+            document.documentElement.classList.remove('js-reveal');
+        } else {
+            var io = new IntersectionObserver(function(entries){
+                entries.forEach(function(en){
+                    if (en.isIntersecting) { en.target.classList.add('is-visible'); io.unobserve(en.target); }
+                });
+            }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+            window.__furiozoReveal = true;
+            var scan = function(){ document.querySelectorAll(revealSel).forEach(function(el){ io.observe(el); }); };
+            scan();
+            // Cards da vitrine são renderizados depois pelo main.js
+            var grid = document.getElementById('product-grid');
+            if (grid) new MutationObserver(scan).observe(grid, { childList: true });
         }
 
         // Cursor próprio: ponto neon que cresce sobre elementos clicáveis (só com mouse)
@@ -1111,9 +1139,10 @@
             })();
         }
 
-        // Rolagem suave com inércia (Lenis); modais e carrinho usam data-lenis-prevent
+        // Rolagem suave com inércia (Lenis) só com mouse: no toque o navegador já
+        // rola com inércia nativa. Modais e carrinho usam data-lenis-prevent.
         window.addEventListener('load', function(){
-            if (reduce || typeof window.Lenis !== 'function') return;
+            if (reduce || typeof window.Lenis !== 'function' || !window.matchMedia('(pointer: fine)').matches) return;
             try {
                 var lenis = new window.Lenis({ lerp: 0.12 });
                 function raf(t){ lenis.raf(t); requestAnimationFrame(raf); }

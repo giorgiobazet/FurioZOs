@@ -364,7 +364,7 @@ function renderProducts() {
             ? '<button type="button" data-product-id="' + pid + '" class="bg-[#ccff00] text-ink w-12 h-12 flex items-center justify-center group-hover:bg-bone transition-colors active:scale-95" title="Personalizar e Comprar"><i class="fa-solid fa-arrow-right text-lg group-hover:-rotate-45 transition-transform duration-300"></i></button>'
             : '<button type="button" data-product-id="' + pid + '" class="border border-ash text-smoke w-12 h-12 flex items-center justify-center cursor-not-allowed" title="Indisponível no momento"><i class="fa-solid fa-lock text-base"></i></button>';
 
-        const cardHoverClass = isAvailable ? "hover:bg-soot hover:border-[#ccff00]/50" : "opacity-80";
+        const cardHoverClass = isAvailable ? "hover:bg-soot hover:border-[#ccff00]/50" : "[&>*]:opacity-75";
         const cursorClass = isAvailable ? "cursor-pointer" : "cursor-not-allowed";
         const imgEffectClass = isAvailable ? "group-hover:scale-105" : "grayscale";
         const titleHoverClass = isAvailable ? "cursor-pointer group-hover:text-[#ccff00]" : "";
@@ -376,7 +376,7 @@ function renderProducts() {
         const code = String(i + 1).padStart(3, "0");
 
         htmlList.push(
-            '<div class="reveal bg-coal border border-ash ' + cardHoverClass + ' transition-colors duration-500 flex flex-col relative group">' +
+            '<div class="reveal bg-coal border border-ash ' + cardHoverClass + ' transition-all duration-700 ease-razor flex flex-col relative group">' +
                 '<div class="relative pb-[115%] ' + cursorClass + ' overflow-hidden bg-soot" data-product-id="' + pid + '">' +
                     '<span class="absolute top-3 left-3 z-10 label text-bone mix-blend-difference">' + code + ' / FurioZOs</span>' +
                     '<span class="absolute top-3 right-3 z-10 w-3 h-3 rounded-full border border-bone/50 bg-ink"></span>' +
