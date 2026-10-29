@@ -1,11 +1,37 @@
 /* public/assets/css/style.css */
+
+/* ───────────────────────── Tokens ───────────────────────── */
+:root {
+    --ink: #050b07;
+    --coal: #0a140d;
+    --soot: #101d14;
+    --ash: #1d2e22;
+    --smoke: #8c9a8f;
+    --bone: #eef1e6;
+    --neon: #ccff00;
+    --verde: #1F4229;
+    --oliva: #8A9A4A;
+    --ease-razor: cubic-bezier(0.77, 0, 0.18, 1);
+    color-scheme: dark;
+}
+
 html {
     scroll-behavior: smooth;
+    background: var(--ink);
 }
+
+/* Lenis (rolagem com inércia) assume a rolagem quando ativo */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
 
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #eaf2e3;
+    background-color: var(--ink);
+    color: var(--bone);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
 h1,
@@ -13,7 +39,17 @@ h2,
 h3,
 h4,
 .font-sport {
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Big Shoulders Display', 'Big Shoulders', 'Montserrat', sans-serif;
+}
+
+::selection {
+    background: var(--neon);
+    color: var(--ink);
+}
+
+:focus-visible {
+    outline: 2px solid var(--neon);
+    outline-offset: 3px;
 }
 
 /* Custom Scrollbar (Página e Modais) */
@@ -23,17 +59,346 @@ h4,
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
+    background: var(--coal);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #8A9A4A;
+    background: var(--oliva);
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #1F4229;
+    background: var(--neon);
+}
+
+/* Só o Painel da Diretoria continua claro (ferramenta interna) */
+#admin-modal-content ::-webkit-scrollbar-track,
+#admin-modal-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+#admin-modal-content {
+    color-scheme: light;
+    color: #1f2937;
+}
+
+/* ───────────────────────── Modais (visual escuro) ───────────────────────── */
+.fz-panel {
+    background: var(--coal);
+    color: var(--bone);
+    border: 1px solid var(--ash);
+    border-top: 3px solid var(--neon);
+    box-shadow: 0 40px 120px rgba(0, 0, 0, 0.7);
+}
+
+.fz-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--smoke);
+}
+
+.fz-input {
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    background: var(--ink);
+    border: 1px solid var(--ash);
+    color: var(--bone);
+    font-size: 0.9rem;
+    font-weight: 600;
+    outline: none;
+    transition: border-color .25s, box-shadow .25s;
+}
+
+.fz-input::placeholder { color: rgba(140, 154, 143, 0.6); font-weight: 400; }
+.fz-input:focus { border-color: var(--neon); box-shadow: 0 0 0 3px rgba(204, 255, 0, 0.12); }
+.fz-input[readonly] { color: var(--smoke); }
+select.fz-input option { background: var(--coal); color: var(--bone); }
+
+.fz-close {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(238, 241, 230, 0.25);
+    color: var(--bone);
+    transition: background-color .25s, color .25s, border-color .25s;
+}
+
+.fz-close:hover { background: var(--neon); color: var(--ink); border-color: var(--neon); }
+
+/* Abas segmentadas (Login/Cadastro, Dados/Pedidos) */
+.seg-tab {
+    flex: 1;
+    padding: 0.7rem 0.5rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--smoke);
+    border-bottom: 2px solid var(--ash);
+    transition: color .25s, border-color .25s, background-color .25s;
+}
+
+.seg-tab:hover { color: var(--bone); }
+.seg-tab.is-active { color: var(--neon); border-color: var(--neon); background: rgba(204, 255, 0, 0.05); }
+
+/* Botões de tamanho */
+.size-btn {
+    min-width: 3rem;
+    height: 3rem;
+    padding: 0 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ash);
+    background: var(--ink);
+    color: var(--bone);
+    font-family: 'Big Shoulders Display', 'Big Shoulders', sans-serif;
+    font-weight: 800;
+    font-size: 1.15rem;
+    transition: border-color .2s, background-color .2s, color .2s;
+}
+
+.size-btn:hover { border-color: var(--neon); }
+.size-btn.is-active { background: var(--neon); border-color: var(--neon); color: var(--ink); }
+
+/* Cartões de opção (entrega e forma de pagamento) */
+.opt-card {
+    position: relative;
+    text-align: left;
+    padding: 0.9rem 1rem;
+    background: var(--ink);
+    border: 1px solid var(--ash);
+    color: var(--bone);
+    transition: border-color .25s, background-color .25s;
+}
+
+.opt-card:hover:not(:disabled) { border-color: rgba(204, 255, 0, 0.5); }
+.opt-card.is-active { border-color: var(--neon); background: rgba(204, 255, 0, 0.07); }
+.opt-card .opt-check {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    width: 0.9rem;
+    height: 0.9rem;
+    border: 1px solid var(--smoke);
+    border-radius: 9999px;
+}
+
+.opt-card.is-active .opt-check { border-color: var(--neon); background: var(--neon); box-shadow: inset 0 0 0 3px var(--ink); }
+
+/* Swiper do modal de produto em neon */
+.modalSwiper .swiper-pagination-bullet { background: var(--bone); opacity: .35; border-radius: 0; width: 18px; height: 3px; }
+.modalSwiper .swiper-pagination-bullet-active { background: var(--neon); opacity: 1; }
+
+/* ───────────────────────── Textura ───────────────────────── */
+/* Ruído de filme sobre tudo — tira a "cara de tela" plana. */
+.grain::after {
+    content: "";
+    position: fixed;
+    inset: -50%;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 0.9s steps(4) infinite;
+}
+
+/* Hachura diagonal (tecido dry-fit) */
+.hatch {
+    background-image: repeating-linear-gradient(-45deg,
+            transparent 0 6px,
+            rgba(238, 241, 230, 0.06) 6px 7px);
+}
+
+/* Listras verde e branco da camisa */
+.stripes-manto {
+    background-image: repeating-linear-gradient(-45deg,
+            var(--neon) 0 12px,
+            var(--ink) 12px 24px,
+            var(--bone) 24px 26px,
+            var(--ink) 26px 36px);
+}
+
+/* ───────────────────────── Tipografia ───────────────────────── */
+.label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.text-outline {
+    color: transparent;
+    -webkit-text-stroke: 1.5px var(--bone);
+}
+
+.text-outline-neon {
+    color: transparent;
+    -webkit-text-stroke: 1.5px var(--neon);
+}
+
+/* ───────────────────────── Navbar ───────────────────────── */
+#site-nav {
+    transition: background-color .5s var(--ease-razor), border-color .5s, backdrop-filter .5s;
+}
+
+#site-nav.is-scrolled {
+    background-color: rgba(5, 11, 7, 0.82);
+    border-color: rgba(204, 255, 0, 0.25);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.nav-link .nav-underline {
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform .5s var(--ease-razor);
+}
+
+.nav-link:hover .nav-underline {
+    transform: scaleX(1);
+    transform-origin: left;
+}
+
+#mobile-menu:not(.hidden) {
+    animation: curtain .6s var(--ease-razor) both;
+}
+
+/* Barra de progresso da rolagem */
+#scroll-progress {
+    transform-origin: left;
+    transform: scaleX(0);
+}
+
+/* ───────────────────────── Botão "navalha" ───────────────────────── */
+/* Uma camada corta o botão na diagonal no hover. */
+.btn-razor {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+    font-family: 'Big Shoulders Display', 'Big Shoulders', sans-serif;
+    font-weight: 800;
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    transition: color .3s;
+}
+
+.btn-razor::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -20%;
+    right: -20%;
+    z-index: -1;
+    transform: translateX(-110%) skewX(-18deg);
+    transition: transform .5s var(--ease-razor);
+}
+
+.btn-razor:hover::before { transform: translateX(0) skewX(-18deg); }
+.btn-razor .arrow { transition: transform .3s; }
+.btn-razor:hover .arrow { transform: translateX(4px); }
+
+.btn-razor--solid { background: var(--neon); color: var(--ink); }
+.btn-razor--solid::before { background: var(--bone); }
+.btn-razor--ghost { border: 1px solid rgba(238, 241, 230, 0.3); color: var(--bone); }
+.btn-razor--ghost::before { background: var(--neon); }
+.btn-razor--ghost:hover { color: var(--ink); }
+
+/* ───────────────────────── Letreiro ───────────────────────── */
+.marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marquee 32s linear infinite;
+}
+
+.marquee-track--reverse { animation-direction: reverse; }
+
+/* ───────────────────────── Hero ───────────────────────── */
+.hero-rise { animation: rise 1s var(--ease-razor) both; }
+.hero-rise-2 { animation: rise 1s .15s var(--ease-razor) both; }
+.hero-rise-3 { animation: rise 1s .3s var(--ease-razor) both; }
+
+.clip-diagonal { clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%); }
+
+/* ───────────────────────── Gestão ───────────────────────── */
+.member-card img {
+    transition: transform .7s var(--ease-razor);
+}
+
+.member-card:hover img {
+    transform: scale(1.05);
+}
+
+.member-card .member-wipe {
+    transform: translateY(100%);
+    transition: transform .7s var(--ease-razor);
+}
+
+.member-card:hover .member-wipe { transform: translateY(0); }
+
+/* Faixa da Gestão: rolagem horizontal com encaixe, sem estrutura de carrossel */
+.gestao-strip { scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; scroll-padding-left: 4px;  }
+.gestao-strip::-webkit-scrollbar { display: none; }
+.gestao-strip.dragging { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; }
+
+/* ───────────────────────── Loja ───────────────────────── */
+/* Picote de ingresso (banner do lote) */
+.perforated {
+    -webkit-mask: radial-gradient(circle 10px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle 10px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
+    mask: radial-gradient(circle 10px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle 10px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
+}
+
+/* ───────────────────────── Cursor ───────────────────────── */
+#cursor-dot {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 300;
+    width: 12px;
+    height: 12px;
+    border-radius: 9999px;
+    background: var(--neon);
+    pointer-events: none;
+    mix-blend-mode: difference;
+    transition: width .3s var(--ease-razor), height .3s var(--ease-razor);
+}
+
+#cursor-dot[data-hover="link"] { width: 44px; height: 44px; }
+
+/* ───────────────────────── Revelação ao rolar ───────────────────────── */
+/* Usa scroll-driven animations (sem JS). Sem suporte, o conteúdo aparece normal. */
+@supports (animation-timeline: view()) {
+    .reveal {
+        animation: rise linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 55%;
+    }
+    .reveal-slash {
+        animation: slash linear both;
+        animation-timeline: view();
+        animation-range: entry 10% cover 40%;
+    }
+    #scroll-progress {
+        animation: progress linear both;
+        animation-timeline: scroll(root);
+    }
 }
 
 /* Carousel Transitions */
@@ -73,13 +438,14 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .toast {
-    background: #1F4229;
-    color: white;
+    background: var(--coal);
+    color: var(--bone);
     padding: 12px 20px;
-    border-radius: 12px;
+    border-radius: 4px;
     margin-top: 10px;
-    border-left: 5px solid #ccff00;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ash);
+    border-left: 5px solid var(--neon);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
     opacity: 0;
     animation: fadein 0.35s forwards, fadeout 0.4s 3s forwards;
     display: flex;
@@ -91,6 +457,7 @@ input[type="number"]::-webkit-outer-spin-button {
     pointer-events: auto;
 }
 
+/* ───────────────────────── Keyframes ───────────────────────── */
 @keyframes fadein {
     from {
         opacity: 0;
@@ -111,4 +478,54 @@ input[type="number"]::-webkit-outer-spin-button {
         opacity: 0;
         transform: translateY(20px);
     }
+}
+
+@keyframes marquee {
+    to { transform: translateX(-50%); }
+}
+
+@keyframes grain {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-3%, 2%); }
+    40% { transform: translate(2%, -3%); }
+    60% { transform: translate(-1%, 3%); }
+    80% { transform: translate(3%, -1%); }
+}
+
+@keyframes rise {
+    from { opacity: 0; transform: translateY(48px) skewY(3deg); clip-path: inset(-40% -10% 100% -10%); }
+    /* margem negativa: acentos (Á, Ó, Ã) acima da linha não são recortados */
+    to { opacity: 1; transform: none; clip-path: inset(-40% -10% -40% -10%); }
+}
+
+@keyframes slash {
+    from { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+    to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+
+@keyframes curtain {
+    from { clip-path: polygon(0 0, 100% 0, 100% 0, 0 0); }
+    to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+
+@keyframes progress {
+    to { transform: scaleX(1); }
+}
+
+@keyframes blink {
+    to { visibility: hidden; }
+}
+
+.animate-blink { animation: blink 1.2s steps(2, start) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+    .marquee-track { animation: none; }
+    .reveal, .reveal-slash { animation: none !important; }
 }
