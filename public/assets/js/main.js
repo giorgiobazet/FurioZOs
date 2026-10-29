@@ -329,13 +329,32 @@ function maskExpiry(val) {
 // ============================================================================
 // 4. RENDERIZACAO DA VITRINE DE PRODUTOS (IMEDIATA)
 // ============================================================================
+// Ordem da vitrine: disponíveis primeiro; dentro de cada status, a camisa
+// especial (p2) e a bandana (p5) vêm na frente. Ids fora da lista vão ao fim.
+const SHOWCASE_ORDER = ["p2", "p5", "p3", "p4", "p1"];
+const STATUS_ORDER = { disponivel: 0, em_breve: 1, esgotado: 2 };
+
+function sortedCatalog() {
+    const rank = function (p) {
+        const pos = SHOWCASE_ORDER.indexOf(p.id);
+        return pos === -1 ? SHOWCASE_ORDER.length : pos;
+    };
+    const statusRank = function (p) {
+        return STATUS_ORDER[p.status] !== undefined ? STATUS_ORDER[p.status] : 3;
+    };
+    return productsCatalog.slice().sort(function (a, b) {
+        return (statusRank(a) - statusRank(b)) || (rank(a) - rank(b));
+    });
+}
+
 function renderProducts() {
     const grid = byId("product-grid");
     if (!grid) return;
 
+    const catalog = sortedCatalog();
     const htmlList = [];
-    for (let i = 0; i < productsCatalog.length; i++) {
-        const p = productsCatalog[i];
+    for (let i = 0; i < catalog.length; i++) {
+        const p = catalog[i];
         const isAvailable = p.status === "disponivel";
         const isComingSoon = p.status === "em_breve";
         const isSoldOut = p.status === "esgotado";
