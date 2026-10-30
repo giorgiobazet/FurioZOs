@@ -3,6 +3,24 @@ main = "src/index.js"
 compatibility_date = "2025-06-01"
 preview_urls = false
 
+# Limites compartilhados pelas instancias do Worker em cada localidade da
+# Cloudflare (as regras de Rate Limiting do painel nao valem para workers.dev).
+[[ratelimits]]
+name = "IP_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[[ratelimits]]
+name = "CHECKOUT_LIMITER"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60
+
 [vars]
 FIREBASE_PROJECT_ID = "atletica-furiozos"
 APP_ID = "furiozos-app"
