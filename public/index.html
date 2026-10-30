@@ -854,6 +854,37 @@
         </div>
     </div>
 
+    <!-- Modal Confirmar E-mail (exigido para pagar) -->
+    <div id="verify-modal" data-lenis-prevent class="fixed inset-0 z-[120] hidden flex items-center justify-center p-3 md:p-6">
+        <div class="fz-panel w-full max-w-md max-h-[92vh] overflow-y-auto transform scale-95 opacity-0 transition-all duration-150 ease-out" id="verify-modal-content" role="dialog" aria-modal="true" aria-labelledby="verify-title">
+            <div class="relative p-8 text-center bg-furiozo-dark overflow-hidden">
+                <div class="absolute inset-0 hatch pointer-events-none"></div>
+                <button id="close-verify" type="button" aria-label="Fechar" class="absolute top-4 right-4 fz-close z-10"><i class="fa-solid fa-xmark"></i></button>
+                <div class="relative w-16 h-16 bg-neon text-ink flex items-center justify-center text-3xl mx-auto mb-4 shadow-[0_0_40px_rgba(204,255,0,0.5)]">
+                    <i class="fa-solid fa-envelope-circle-check"></i>
+                </div>
+                <span class="relative label text-neon">Antes de pagar</span>
+                <h2 id="verify-title" class="relative font-sport text-4xl font-black uppercase leading-none mt-2">Confirme seu <span class="text-neon">e-mail</span></h2>
+            </div>
+
+            <div class="p-6 space-y-5">
+                <p class="text-sm text-bone/80 leading-relaxed">
+                    Por segurança, só liberamos o pagamento para contas com e-mail confirmado.
+                    Abra o link que enviamos para <strong id="verify-email-target" class="text-bone break-all">seu e-mail</strong>
+                    e depois volte aqui. Não achou? Confira o spam ou peça um novo link.
+                </p>
+                <div class="space-y-2">
+                    <button type="button" id="btn-verify-done" class="btn-razor btn-razor--solid w-full !text-base">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i> Já confirmei</span><span class="arrow">→</span>
+                    </button>
+                    <button type="button" id="btn-verify-resend" class="btn-razor btn-razor--ghost w-full !text-base">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-rotate-right"></i> Reenviar link</span><span class="arrow">→</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Meu Perfil -->
     <div id="profile-modal" data-lenis-prevent class="fixed inset-0 z-[115] hidden flex items-center justify-center p-3 md:p-6">
         <div class="fz-panel w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col transform scale-95 opacity-0 transition-all duration-150 ease-out" id="profile-modal-content">
