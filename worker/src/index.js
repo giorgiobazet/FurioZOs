@@ -92,6 +92,10 @@ export default {
                 return await handleWebhook(request, env, url);
             }
 
+            if (url.pathname === "/csp-report" && request.method === "POST") {
+                return await handleCspReport(request, env);
+            }
+
             if (!cors) {
                 return json({ message: "Origem não permitida." }, 403);
             }
@@ -323,6 +327,35 @@ async function handleWebhook(request, env, url) {
 
     await reconcilePayment(env, mp.data);
     return new Response("ok", { status: 200 });
+}
+
+// Relatorios de violacao da CSP enviados pelo navegador (diagnostico).
+// So registra no log do Worker (wrangler tail); nada e gravado no banco.
+async function handleCspReport(request, env) {
+    const text = (await request.text()).slice(0, 20000);
+    let reports = [];
+    try {
+        const parsed = JSON.parse(text || "null");
+        if (Array.isArray(parsed)) {
+            reports = parsed.map(function (r) { return r && r.body ? r.body : {}; });
+        } else if (parsed && parsed["csp-report"]) {
+            reports = [parsed["csp-report"]];
+        }
+    } catch (e) {
+        return new Response(null, { status: 204 });
+    }
+
+    const allowed = String(env.ALLOWED_ORIGINS || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    for (const r of reports.slice(0, 20)) {
+        const page = String(r["document-uri"] || r.documentURL || "");
+        if (!allowed.some(function (o) { return page.indexOf(o) === 0; })) continue;
+        console.log("CSP bloqueou: " + JSON.stringify({
+            recurso: String(r["blocked-uri"] || r.blockedURL || "").slice(0, 300),
+            diretiva: String(r["effective-directive"] || r.effectiveDirective || r["violated-directive"] || ""),
+            origem: String(r["source-file"] || r.sourceFile || "").slice(0, 200) + ":" + (r["line-number"] || r.lineNumber || "")
+        }));
+    }
+    return new Response(null, { status: 204 });
 }
 
 async function verifyMpSignature(request, secret, dataId) {
