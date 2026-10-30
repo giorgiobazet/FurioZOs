@@ -503,7 +503,9 @@ function priceItems(rawItems, catalog) {
 
     return rawItems.map(function (raw) {
         raw = raw || {};
-        const product = catalog[String(raw.id || "")];
+        // Busca so entre os produtos reais (ignora chaves internas como "__proto__")
+        const productKey = String(raw.id || "");
+        const product = Object.prototype.hasOwnProperty.call(catalog, productKey) ? catalog[productKey] : null;
         if (!product) throw new HttpError(400, "Um produto do carrinho não existe mais. Atualize a página.");
         if (product.status !== "disponivel") throw new HttpError(400, "\"" + product.name + "\" não está disponível no momento.");
 
@@ -564,7 +566,7 @@ function priceItems(rawItems, catalog) {
 
 async function loadCatalog(env) {
     const docs = await fsList(env, productsCollectionPath(env));
-    const catalog = {};
+    const catalog = Object.create(null);
     for (const d of docs) {
         const id = String(d.data.id || d.id);
         catalog[id] = Object.assign({}, d.data, { id: id });

@@ -21,16 +21,63 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Carrinho e perfil (cart/current e cart/profile): somente o dono
+    // Texto opcional com tamanho maximo
+    function optStr(data, key, max) {
+      return !(key in data) || (data[key] is string && data[key].size() <= max);
+    }
+
+    // So os campos que mudaram precisam estar na lista (dados antigos continuam validos)
+    function changesOnly(keys) {
+      return resource == null
+        ? request.resource.data.keys().hasOnly(keys)
+        : request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // Carrinho e perfil: somente o dono, e so com o formato que o site grava.
+    // Os precos do carrinho sao so exibicao: o Worker recalcula tudo no checkout.
+    match /artifacts/{appId}/users/{userId}/cart/current {
+      allow read, delete: if registered() && request.auth.uid == userId;
+      allow create, update: if registered() && request.auth.uid == userId
+        && changesOnly(['items', 'updatedAt'])
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 50;
+    }
+
+    match /artifacts/{appId}/users/{userId}/cart/profile {
+      allow read, delete: if registered() && request.auth.uid == userId;
+      allow create, update: if registered() && request.auth.uid == userId
+        && changesOnly(['name', 'matricula', 'cpf', 'phone', 'updatedAt'])
+        && optStr(request.resource.data, 'name', 120)
+        && optStr(request.resource.data, 'matricula', 20)
+        && optStr(request.resource.data, 'cpf', 20)
+        && optStr(request.resource.data, 'phone', 25);
+    }
+
+    // Qualquer outro documento dentro de cart/ fica bloqueado
     match /artifacts/{appId}/users/{userId}/cart/{docId} {
-      allow read, write: if registered() && request.auth.uid == userId;
+      allow read: if registered() && request.auth.uid == userId;
+      allow write: if false;
     }
 
     // Catalogo: leitura publica, escrita so da diretoria.
     // O estoque de pronta entrega e baixado pelo Worker (conta de servico).
     match /artifacts/{appId}/public/data/products/{productId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.price is number
+        && request.resource.data.price > 0
+        && request.resource.data.price <= 10000
+        && request.resource.data.status in ['disponivel', 'em_breve', 'esgotado']
+        && (!('immediateStock' in request.resource.data)
+            || (request.resource.data.immediateStock is int
+                && request.resource.data.immediateStock >= 0
+                && request.resource.data.immediateStock <= 100000))
+        && (!('images' in request.resource.data) || request.resource.data.images is list)
+        && optStr(request.resource.data, 'desc', 2000);
     }
 
     // Pedidos: criados e confirmados SOMENTE pelo Worker de pagamento.
@@ -41,7 +88,11 @@ service cloud.firestore {
       allow create: if false;
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'adminNote', 'deliveredAtISO']);
+             .hasOnly(['status', 'adminNote', 'deliveredAtISO'])
+        && request.resource.data.status in ['Aguardando pagamento', 'Em análise',
+             'Pago / Confirmado', 'Pagamento recusado', 'Cancelado', 'Estornado', 'Entregue']
+        && optStr(request.resource.data, 'adminNote', 500)
+        && optStr(request.resource.data, 'deliveredAtISO', 40);
       allow delete: if isAdmin();
     }
   }
