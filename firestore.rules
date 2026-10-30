@@ -47,9 +47,9 @@ service cloud.firestore {
       allow read, delete: if registered() && request.auth.uid == userId;
       allow create, update: if registered() && request.auth.uid == userId
         && changesOnly(['name', 'matricula', 'cpf', 'phone', 'updatedAt'])
+        && !('cpf' in request.resource.data) // CPF nao e guardado (LGPD); 'cpf' na lista so para poder apagar
         && optStr(request.resource.data, 'name', 120)
         && optStr(request.resource.data, 'matricula', 20)
-        && optStr(request.resource.data, 'cpf', 20)
         && optStr(request.resource.data, 'phone', 25);
     }
 

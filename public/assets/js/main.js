@@ -22,7 +22,8 @@ import {
     collection,
     query,
     where,
-    serverTimestamp
+    serverTimestamp,
+    deleteField
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import Swiper from "https://cdn.jsdelivr.net/npm/swiper@11.2.10/swiper-bundle.min.mjs";
 
@@ -1338,9 +1339,17 @@ async function loadUserProfileData() {
             userProfile = {
                 name: d.name ? d.name : fallbackName,
                 matricula: d.matricula ? d.matricula : "",
-                cpf: d.cpf ? d.cpf : "",
+                cpf: "",
                 phone: d.phone ? d.phone : ""
             };
+            // Perfis antigos guardavam o CPF completo: apaga no primeiro acesso
+            if ("cpf" in d) {
+                try {
+                    await saveUserProfileData();
+                } catch (purgeErr) {
+                    console.warn("Limpeza do CPF:", purgeErr);
+                }
+            }
         } else {
             userProfile = { name: fallbackName, matricula: "", cpf: "", phone: "" };
         }
@@ -1352,7 +1361,14 @@ async function loadUserProfileData() {
 async function saveUserProfileData() {
     if (!isRegisteredUser() || !db) return;
     const profRef = doc(db, "artifacts", appId, "users", currentUser.uid, "cart", "profile");
-    await setDoc(profRef, Object.assign({}, userProfile, { updatedAt: serverTimestamp() }), { merge: true });
+    // O CPF fica so na memoria da pagina (LGPD): nunca e gravado no perfil
+    await setDoc(profRef, {
+        name: userProfile.name || "",
+        matricula: userProfile.matricula || "",
+        phone: userProfile.phone || "",
+        cpf: deleteField(),
+        updatedAt: serverTimestamp()
+    }, { merge: true });
 }
 
 // ============================================================================
@@ -1369,7 +1385,6 @@ function openProfileModal() {
     if (byId("profile-header-email")) byId("profile-header-email").textContent = uEmail;
     if (byId("profile-name")) byId("profile-name").value = uName;
     if (byId("profile-matricula")) byId("profile-matricula").value = userProfile.matricula ? userProfile.matricula : "";
-    if (byId("profile-cpf")) byId("profile-cpf").value = userProfile.cpf ? userProfile.cpf : "";
     if (byId("profile-phone")) byId("profile-phone").value = userProfile.phone ? userProfile.phone : "";
     if (byId("profile-new-password")) byId("profile-new-password").value = "";
 
@@ -1888,7 +1903,7 @@ function bindDelegatedEvents() {
 function bindAllEvents() {
     bindDelegatedEvents();
 
-    ["checkout-cpf", "profile-cpf"].forEach(function (id) {
+    ["checkout-cpf"].forEach(function (id) {
         on(id, "input", function (e) { e.target.value = maskCPF(e.target.value); });
     });
     ["checkout-phone", "profile-phone"].forEach(function (id) {
@@ -2082,16 +2097,11 @@ function bindAllEvents() {
 
         const name = byId("profile-name") ? byId("profile-name").value.trim().slice(0, 80) : "";
         const matricula = byId("profile-matricula") ? byId("profile-matricula").value.replace(/\D/g, "") : "";
-        const cpf = byId("profile-cpf") ? byId("profile-cpf").value.trim() : "";
         const phone = byId("profile-phone") ? byId("profile-phone").value.trim() : "";
         const newPass = byId("profile-new-password") ? byId("profile-new-password").value : "";
 
         if (matricula && matricula.length !== 12) {
             showToast("A Matrícula UERJ deve ter exatamente 12 dígitos.", "error");
-            return;
-        }
-        if (cpf && !isValidCpf(cpf)) {
-            showToast("CPF inválido. Confira os números digitados.", "error");
             return;
         }
         if (newPass && newPass.length < 8) {
@@ -2103,7 +2113,7 @@ function bindAllEvents() {
             if (name && name !== currentUser.displayName) {
                 await updateProfile(currentUser, { displayName: name });
             }
-            userProfile = { name: name, matricula: matricula, cpf: cpf, phone: phone };
+            userProfile = { name: name, matricula: matricula, cpf: userProfile.cpf || "", phone: phone };
             await saveUserProfileData();
 
             if (newPass) {
