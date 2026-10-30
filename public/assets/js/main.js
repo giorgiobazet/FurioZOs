@@ -10,7 +10,8 @@ import {
     signOut,
     updateProfile,
     updatePassword,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    sendEmailVerification
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore,
@@ -98,6 +99,7 @@ try {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
+    auth.languageCode = "pt-BR"; // e-mails do Firebase (verificacao, senha) em portugues
 } catch (err) {
     console.error("Erro ao inicializar Firebase:", err);
 }
@@ -1678,12 +1680,43 @@ function closeCartSidebar() {
     }, 250);
 }
 
+// ============================================================================
+// VERIFICACAO DE E-MAIL (exigida para pagar)
+// ============================================================================
+const VERIFY_EMAIL_SETTINGS = { url: "https://atletica-furiozos.web.app/" };
+let verifyResendAvailableAt = 0;
+
+// Recarrega o usuario para pegar a confirmacao feita em outra aba/aparelho e
+// renova o token, para o Worker enxergar email_verified = true.
+async function isEmailVerified() {
+    if (!isRegisteredUser()) return false;
+    if (currentUser.emailVerified) return true;
+    try {
+        await currentUser.reload();
+        currentUser = auth.currentUser || currentUser;
+        if (currentUser.emailVerified) {
+            await currentUser.getIdToken(true);
+            return true;
+        }
+    } catch (err) {
+        console.warn("Recarregar usuário:", err && err.code ? err.code : err);
+    }
+    return false;
+}
+
+function openVerifyModal() {
+    const target = byId("verify-email-target");
+    if (target) target.textContent = currentUser && currentUser.email ? currentUser.email : "seu e-mail";
+    showModal("verify");
+}
+
 function getModalElements(type) {
     if (type === "product") return { target: byId("product-modal"), content: byId("product-modal-content") };
     if (type === "checkout") return { target: byId("checkout-modal"), content: byId("checkout-modal-content") };
     if (type === "admin") return { target: byId("admin-modal"), content: byId("admin-modal-content") };
     if (type === "profile") return { target: byId("profile-modal"), content: byId("profile-modal-content") };
     if (type === "receipt") return { target: byId("receipt-modal"), content: byId("receipt-modal-content") };
+    if (type === "verify") return { target: byId("verify-modal"), content: byId("verify-modal-content") };
     return { target: byId("auth-modal"), content: byId("auth-modal-content") };
 }
 
@@ -1900,6 +1933,7 @@ function bindAllEvents() {
         closeModal("admin");
         closeModal("profile");
         closeModal("receipt");
+        closeModal("verify");
         closeCartSidebar();
     });
 
@@ -1998,7 +2032,13 @@ function bindAllEvents() {
                     console.warn("Perfil inicial:", profileErr);
                 }
                 updateAuthUI();
-                showToast("Conta criada com sucesso!");
+                try {
+                    await sendEmailVerification(userCredential.user, VERIFY_EMAIL_SETTINGS);
+                    showToast("Conta criada! Enviamos um link de confirmação para " + email + ".");
+                } catch (verifyErr) {
+                    console.warn("Verificação de e-mail:", verifyErr && verifyErr.code ? verifyErr.code : verifyErr);
+                    showToast("Conta criada com sucesso!");
+                }
             }
             closeModal("auth");
         } catch (error) {
@@ -2084,7 +2124,7 @@ function bindAllEvents() {
         }
     });
 
-    on("btn-checkout", "click", function () {
+    on("btn-checkout", "click", async function () {
         if (cart.length === 0) return;
 
         if (!isRegisteredUser()) {
@@ -2094,6 +2134,55 @@ function bindAllEvents() {
             return;
         }
 
+        // Pagamento so com e-mail confirmado (o Worker tambem exige)
+        if (!(await isEmailVerified())) {
+            closeCartSidebar();
+            openVerifyModal();
+            return;
+        }
+
+        openCheckout();
+    });
+
+    on("close-verify", "click", function () { closeModal("verify"); });
+
+    on("btn-verify-done", "click", async function () {
+        const btn = byId("btn-verify-done");
+        if (btn) btn.disabled = true;
+        try {
+            if (await isEmailVerified()) {
+                closeModal("verify");
+                showToast("E-mail confirmado! Vamos finalizar seu pedido.");
+                if (cart.length > 0) setTimeout(openCheckout, 220);
+            } else {
+                showToast("Ainda não encontramos a confirmação. Abra o link do e-mail e tente de novo.", "error");
+            }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    });
+
+    on("btn-verify-resend", "click", async function () {
+        if (!isRegisteredUser()) return;
+        const wait = Math.ceil((verifyResendAvailableAt - Date.now()) / 1000);
+        if (wait > 0) {
+            showToast("Aguarde " + wait + "s para reenviar.", "error");
+            return;
+        }
+        try {
+            await sendEmailVerification(currentUser, VERIFY_EMAIL_SETTINGS);
+            verifyResendAvailableAt = Date.now() + 60000;
+            showToast("Link reenviado para " + currentUser.email + ". Confira também o spam.");
+        } catch (err) {
+            if (err && err.code === "auth/too-many-requests") {
+                showToast("Muitos envios seguidos. Aguarde alguns minutos.", "error");
+            } else {
+                showToast("Não foi possível reenviar agora. Tente em instantes.", "error");
+            }
+        }
+    });
+
+    function openCheckout() {
         stopPixPolling();
         activeOrderId = null;
         refreshCartPrices();
@@ -2110,7 +2199,7 @@ function bindAllEvents() {
         window.selectPaymentMethod("pix");
         closeCartSidebar();
         showModal("checkout");
-    });
+    }
 
     on("card-installments", "change", updateCheckoutTotalsUI);
 

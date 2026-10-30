@@ -126,6 +126,9 @@ async function handleCheckout(request, env, url) {
     if (isRateLimited("checkout:" + user.sub, 5, 10 * 60 * 1000)) {
         throw new HttpError(429, "Muitas tentativas de pagamento. Aguarde alguns minutos.");
     }
+    if (user.email_verified !== true) {
+        throw new HttpError(403, "Confirme seu e-mail antes de pagar. Abra o link que enviamos e tente de novo.");
+    }
     const body = await readJson(request);
 
     if (!user.email) throw new HttpError(400, "Sua conta precisa ter um e-mail para pagar.");
