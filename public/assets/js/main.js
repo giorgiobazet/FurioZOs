@@ -71,7 +71,7 @@ const INSTALLMENT_RATES = {
 
 const MERCADO_PAGO_CONFIG = {
     workerUrl: "https://furiozos-pagamento.bblackgamerbr.workers.dev",
-    publicKey: "APP_USR-0ec36817-11d7-4726-a2e8-7dbf09bda36e",
+    publicKey: "APP_USR-a170c9dc-cc2d-476b-a20b-df9d0dc4a747",
     atleticaWhatsapp: "5521978251441",
     atleticaEmail: "atleticafuriozos@gmail.com"
 };
