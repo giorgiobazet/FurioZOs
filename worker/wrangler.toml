@@ -1,6 +1,7 @@
 name = "furiozos-pagamento"
 main = "src/index.js"
 compatibility_date = "2025-06-01"
+preview_urls = false
 
 [vars]
 FIREBASE_PROJECT_ID = "atletica-furiozos"
