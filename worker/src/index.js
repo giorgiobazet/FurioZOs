@@ -70,6 +70,15 @@ export default {
         const url = new URL(request.url);
         const cors = corsHeaders(request, env);
 
+        // Limite por IP (melhor esforco, por instancia do Worker). Para um limite
+        // global, crie tambem uma regra de Rate Limiting no painel da Cloudflare.
+        if (request.method !== "OPTIONS" && url.pathname !== "/webhook/mercadopago") {
+            const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+            if (isRateLimited("ip:" + ip, 40, 60 * 1000)) {
+                return json({ message: "Muitas requisições. Aguarde um minuto." }, 429, cors || {});
+            }
+        }
+
         if (request.method === "OPTIONS") {
             return new Response(null, { status: cors ? 204 : 403, headers: cors || {} });
         }
@@ -113,6 +122,10 @@ export default {
 // ============================================================================
 async function handleCheckout(request, env, url) {
     const user = await requireUser(request, env);
+    // No maximo 5 tentativas de checkout por conta a cada 10 minutos
+    if (isRateLimited("checkout:" + user.sub, 5, 10 * 60 * 1000)) {
+        throw new HttpError(429, "Muitas tentativas de pagamento. Aguarde alguns minutos.");
+    }
     const body = await readJson(request);
 
     if (!user.email) throw new HttpError(400, "Sua conta precisa ter um e-mail para pagar.");
@@ -286,8 +299,11 @@ async function handleWebhook(request, env, url) {
     // Assinatura: valida quando o segredo esta configurado e o cabecalho veio.
     // Mesmo sem assinatura o processamento e seguro, pois o status e o valor
     // sao sempre consultados direto na API do Mercado Pago com o seu token.
-    if (env.MP_WEBHOOK_SECRET && request.headers.get("x-signature")) {
-        const valid = await verifyMpSignature(request, env.MP_WEBHOOK_SECRET, dataId);
+    // Com o segredo configurado a assinatura passa a ser obrigatoria.
+    if (env.MP_WEBHOOK_SECRET) {
+        const valid = request.headers.get("x-signature")
+            ? await verifyMpSignature(request, env.MP_WEBHOOK_SECRET, dataId)
+            : false;
         if (!valid) return new Response("invalid signature", { status: 401 });
     }
 
@@ -856,6 +872,19 @@ function json(data, status, extraHeaders) {
             extraHeaders || {}
         )
     });
+}
+
+const rateBuckets = new Map();
+
+function isRateLimited(key, max, windowMs) {
+    const now = Date.now();
+    if (rateBuckets.size > 5000) {
+        rateBuckets.forEach(function (v, k) { if (v.reset <= now) rateBuckets.delete(k); });
+    }
+    let b = rateBuckets.get(key);
+    if (!b || b.reset <= now) { b = { count: 0, reset: now + windowMs }; rateBuckets.set(key, b); }
+    b.count++;
+    return b.count > max;
 }
 
 async function readJson(request) {

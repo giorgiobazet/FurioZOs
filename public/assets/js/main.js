@@ -23,7 +23,7 @@ import {
     where,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import Swiper from "https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.mjs";
+import Swiper from "https://cdn.jsdelivr.net/npm/swiper@11.2.10/swiper-bundle.min.mjs";
 
 // ============================================================================
 // 1. CONFIGURACOES DO FIREBASE E MERCADO PAGO (VIA CLOUDFLARE WORKER)
