@@ -70,11 +70,15 @@ export default {
         const url = new URL(request.url);
         const cors = corsHeaders(request, env);
 
-        // Limite por IP (melhor esforco, por instancia do Worker). Para um limite
-        // global, crie tambem uma regra de Rate Limiting no painel da Cloudflare.
+        // Limite por IP. Alunos na mesma rede (Wi-Fi da UERJ) dividem o IP e a
+        // tela do PIX consulta o status a cada 5 s, por isso o teto e generoso.
+        // Camada 1: binding da Cloudflare (compartilhado na localidade).
+        // Camada 2: memoria da instancia (vale mesmo sem o binding).
         if (request.method !== "OPTIONS" && url.pathname !== "/webhook/mercadopago") {
             const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-            if (isRateLimited("ip:" + ip, 40, 60 * 1000)) {
+            const blocked = !(await bindingAllows(env.IP_LIMITER, "ip:" + ip))
+                || isRateLimited("ip:" + ip, 120, 60 * 1000);
+            if (blocked) {
                 return json({ message: "Muitas requisições. Aguarde um minuto." }, 429, cors || {});
             }
         }
@@ -122,8 +126,10 @@ export default {
 // ============================================================================
 async function handleCheckout(request, env, url) {
     const user = await requireUser(request, env);
-    // No maximo 5 tentativas de checkout por conta a cada 10 minutos
-    if (isRateLimited("checkout:" + user.sub, 5, 10 * 60 * 1000)) {
+    // Checkout por conta: ate 3 por minuto (binding) e 5 a cada 10 minutos (memoria)
+    const checkoutBlocked = !(await bindingAllows(env.CHECKOUT_LIMITER, "checkout:" + user.sub))
+        || isRateLimited("checkout:" + user.sub, 5, 10 * 60 * 1000);
+    if (checkoutBlocked) {
         throw new HttpError(429, "Muitas tentativas de pagamento. Aguarde alguns minutos.");
     }
     if (user.email_verified !== true) {
@@ -877,6 +883,19 @@ function json(data, status, extraHeaders) {
             extraHeaders || {}
         )
     });
+}
+
+// Rate Limiting binding da Cloudflare. Se o binding nao existir ou falhar,
+// libera e deixa a camada em memoria decidir (nunca derruba o pagamento).
+async function bindingAllows(limiter, key) {
+    if (!limiter || typeof limiter.limit !== "function") return true;
+    try {
+        const r = await limiter.limit({ key: key });
+        return !r || r.success !== false;
+    } catch (e) {
+        console.error("rate limit binding:", e && e.message ? e.message : e);
+        return true;
+    }
 }
 
 const rateBuckets = new Map();
