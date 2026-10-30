@@ -704,6 +704,7 @@
                         <div>
                             <label for="checkout-cpf" class="fz-label">CPF do pagador *</label>
                             <input type="text" id="checkout-cpf" required maxlength="14" placeholder="000.000.000-00" class="fz-input font-mono">
+                            <p class="label text-smoke mt-1.5 normal-case tracking-normal">Por segurança, o CPF não fica salvo na sua conta.</p>
                         </div>
                         <div>
                             <label for="checkout-phone" class="fz-label">WhatsApp c/ DDD *</label>
@@ -923,10 +924,6 @@
                             <input type="text" id="profile-matricula" inputmode="numeric" maxlength="12" placeholder="202610123456" class="fz-input font-mono">
                         </div>
                         <div>
-                            <label for="profile-cpf" class="fz-label">CPF</label>
-                            <input type="text" id="profile-cpf" maxlength="14" placeholder="000.000.000-00" class="fz-input font-mono">
-                        </div>
-                        <div class="sm:col-span-2">
                             <label for="profile-phone" class="fz-label">WhatsApp com DDD</label>
                             <input type="tel" id="profile-phone" maxlength="15" placeholder="(21) 99999-9999" class="fz-input">
                         </div>
@@ -934,7 +931,7 @@
 
                     <div class="border-t border-ash pt-4">
                         <label for="profile-new-password" class="fz-label"><i class="fa-solid fa-key mr-1 text-neon"></i> Alterar senha de acesso (opcional)</label>
-                        <input type="password" id="profile-new-password" minlength="6" placeholder="Nova senha (mín. 6 caracteres) ou deixe em branco" class="fz-input">
+                        <input type="password" id="profile-new-password" minlength="8" placeholder="Nova senha (mín. 8 caracteres) ou deixe em branco" class="fz-input">
                     </div>
 
                     <button type="submit" class="btn-razor btn-razor--solid w-full">
