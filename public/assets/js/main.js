@@ -147,7 +147,7 @@ const DEFAULT_PRODUCTS = [
     {
         id: "p3",
         name: "Camisa de Jogo",
-        price: 84.90,
+        price: 64.90,
         images: [
             "assets/img/camisa-jogo-linha-frente.jpg",
             "assets/img/camisa-jogo-goleiro-frente.jpg",
