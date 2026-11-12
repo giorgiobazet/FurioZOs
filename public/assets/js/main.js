@@ -429,7 +429,7 @@ function renderProducts() {
         const imgUrl = (p.images && p.images.length > 0) ? p.images[0] : "assets/img/logo-atletica.jpg";
         const code = String(i + 1).padStart(3, "0");
 
-        // "Em breve": no lugar da foto, trevo com folhas acendendo e fita de torcida
+        // "Em breve": no lugar da foto, trevo sendo desenhado na prancheta + fita de torcida
         const tapeText = "Carregando a sorte ✦ Em breve ✦ ";
         const mediaHTML = isComingSoon
             ? '<div class="soon-panel" role="img" aria-label="' + esc(p.name) + ': em breve">' +
@@ -437,8 +437,10 @@ function renderProducts() {
                       [0, 90, 180, 270].map(function (deg) {
                           return '<path transform="rotate(' + deg + ')" d="M0 -4 C-16 -10 -20 -34 -8 -38 C-2 -40 0 -34 0 -30 C0 -34 2 -40 8 -38 C20 -34 16 -10 0 -4Z"/>';
                       }).join("") +
+                      '<path d="M4 6 C12 22 14 34 22 48"/>' +
                   '</svg>' +
                   '<div class="soon-tape" aria-hidden="true"><div class="soon-tape-track">' + tapeText.repeat(8) + '</div></div>' +
+                  '<span class="soon-status" aria-hidden="true">Na prancheta</span>' +
               '</div>'
             : '<img src="' + esc(imgUrl) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="' + esc(p.name) + '" class="absolute inset-0 w-full h-full object-cover ' + imgEffectClass + ' transition-transform duration-700">';
 

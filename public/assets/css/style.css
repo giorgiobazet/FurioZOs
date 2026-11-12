@@ -338,18 +338,21 @@ select.fz-input option { background: var(--coal); color: var(--bone); }
 
 .marquee-track--reverse { animation-direction: reverse; }
 
-/* ───────────────────────── Produto "em breve" (trevo + fita) ───────────────────────── */
-.soon-panel { position: absolute; inset: 0; background: var(--neon); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.soon-clover { width: 52%; max-width: 220px; animation: soon-turn 6s steps(4) infinite; }
-.soon-clover path { fill: #1f241a; stroke: var(--ink); stroke-width: 2.5; animation: soon-leaf 2s infinite; }
-.soon-clover path:nth-child(2) { animation-delay: .5s; }
-.soon-clover path:nth-child(3) { animation-delay: 1s; }
-.soon-clover path:nth-child(4) { animation-delay: 1.5s; }
-.soon-tape { position: absolute; left: -10%; right: -10%; bottom: 14%; background: var(--ink); transform: rotate(-4deg); overflow: hidden; white-space: nowrap; padding: .45rem 0; }
-.soon-tape-track { display: inline-block; animation: marquee 9s linear infinite; font-family: 'Big Shoulders Stencil Display', 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 1.35rem; letter-spacing: .06em; text-transform: uppercase; color: var(--neon); }
+/* ───────────────────────── Produto "em breve" (prancheta + fita) ───────────────────────── */
+.soon-panel {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    background-color: #0e110c;
+    background-image: linear-gradient(#1c2118 1px, transparent 1px), linear-gradient(90deg, #1c2118 1px, transparent 1px);
+    background-size: 18px 18px;
+}
+.soon-clover { width: 52%; max-width: 220px; margin-top: -14%; }
+.soon-clover path { fill: none; stroke: var(--neon); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 420; animation: soon-draw 4s ease-in-out infinite; }
+.soon-status { position: absolute; left: .75rem; bottom: .75rem; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--neon); }
+.soon-status::after { content: "_"; animation: blink 1s steps(2, start) infinite; }
+.soon-tape { position: absolute; left: -10%; right: -10%; bottom: 20%; background: var(--neon); transform: rotate(-4deg); overflow: hidden; white-space: nowrap; padding: .45rem 0; }
+.soon-tape-track { display: inline-block; animation: marquee 9s linear infinite; font-family: 'Big Shoulders Stencil Display', 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 1.35rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
 
-@keyframes soon-turn { to { transform: rotate(360deg); } }
-@keyframes soon-leaf { 0%, 100% { fill: #1f241a; } 12%, 30% { fill: var(--neon); } }
+@keyframes soon-draw { 0% { stroke-dashoffset: 420; } 55%, 75% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -420; } }
 
 /* ───────────────────────── Hero ───────────────────────── */
 .hero-rise { animation: rise 1s var(--ease-razor) both; }
@@ -557,5 +560,6 @@ input[type="number"]::-webkit-outer-spin-button {
         transition-duration: 0.001ms !important;
     }
     .marquee-track { animation: none; }
+    .soon-clover path { animation: none !important; stroke-dashoffset: 0; }
     .js-reveal .reveal, .js-reveal .reveal-slash { opacity: 1 !important; transform: none !important; clip-path: none !important; }
 }
