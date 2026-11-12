@@ -523,6 +523,15 @@ function priceItems(rawItems, catalog) {
             throw new HttpError(400, "Quantidade inválida para \"" + product.name + "\" (máximo " + MAX_QTY_PER_ITEM + ").");
         }
 
+        // Modelo (ex.: camisa de jogo Linha / Goleiro): obrigatorio quando o produto tem modelos
+        let variant = null;
+        const variantList = Array.isArray(product.variants) ? product.variants.filter(function (v) { return v && v.id; }) : [];
+        if (variantList.length > 0) {
+            const wanted = String(raw.variant || "");
+            variant = variantList.find(function (v) { return String(v.id) === wanted; }) || null;
+            if (!variant) throw new HttpError(400, "Escolha o modelo de \"" + product.name + "\" (Linha ou Goleiro).");
+        }
+
         let size = "Único";
         if (product.hasSize) {
             size = String(raw.size || "");
@@ -555,9 +564,14 @@ function priceItems(rawItems, catalog) {
         if (!(basePrice > 0)) throw new HttpError(400, "\"" + product.name + "\" está sem preço configurado.");
         const deliveryFee = deliveryMode === "imediata" ? PRICING_RULES.IMMEDIATE_DELIVERY_FEE : 0;
 
+        const variantImages = variant && Array.isArray(variant.images) && variant.images[0] ? variant.images : null;
+        const images = variantImages || product.images;
+
         return {
             id: product.id,
-            name: String(product.name || ""),
+            name: String(product.name || "") + (variant ? " (" + String(variant.label || variant.id) + ")" : ""),
+            variant: variant ? String(variant.id) : "",
+            variantLabel: variant ? String(variant.label || variant.id) : "",
             size: size,
             customName: customName,
             customNumber: customNumber,
@@ -568,7 +582,7 @@ function priceItems(rawItems, catalog) {
             customFee: customFee,
             deliveryFee: deliveryFee,
             price: round2(basePrice + customFee + deliveryFee),
-            img: (Array.isArray(product.images) && product.images[0]) ? String(product.images[0]) : "assets/img/logo-atletica.jpg"
+            img: (Array.isArray(images) && images[0]) ? String(images[0]) : "assets/img/logo-atletica.jpg"
         };
     });
 }

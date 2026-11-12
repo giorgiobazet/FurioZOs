@@ -147,11 +147,42 @@ const DEFAULT_PRODUCTS = [
     {
         id: "p3",
         name: "Camisa de Jogo",
-        price: 85.00,
-        images: ["assets/img/camisa-jogo.jpg"],
+        price: 84.90,
+        images: [
+            "assets/img/camisa-jogo-linha-frente.jpg",
+            "assets/img/camisa-jogo-goleiro-frente.jpg",
+            "assets/img/camisa-jogo-linha-costas.jpg",
+            "assets/img/camisa-jogo-modelos.jpg"
+        ],
+        // Modelos: branca para jogador de linha, verde para goleiro
+        variants: [
+            {
+                id: "linha",
+                label: "Linha",
+                hint: "Branca • jogador de linha",
+                swatch: "#f2f2ee",
+                images: [
+                    "assets/img/camisa-jogo-linha-frente.jpg",
+                    "assets/img/camisa-jogo-linha-detalhe.jpg",
+                    "assets/img/camisa-jogo-linha-costas.jpg",
+                    "assets/img/camisa-jogo-modelos.jpg"
+                ]
+            },
+            {
+                id: "goleiro",
+                label: "Goleiro",
+                hint: "Verde • goleiro",
+                swatch: "#1f7a34",
+                images: [
+                    "assets/img/camisa-jogo-goleiro-frente.jpg",
+                    "assets/img/camisa-jogo-goleiro-detalhe.jpg",
+                    "assets/img/camisa-jogo-goleiro-costas.jpg"
+                ]
+            }
+        ],
         hasSize: true,
         isShirt: true,
-        status: "em_breve",
+        status: "disponivel",
         immediateStock: 0,
         desc: "Camisa oficial para atletas e guerreiros. Material leve, ideal para a prática esportiva."
     },
@@ -192,6 +223,7 @@ let modalSwiperInstance = null;
 
 let selectedProduct = null;
 let selectedSize = null;
+let selectedVariant = null;
 let selectedDeliveryMode = "lote";
 let selectedPaymentMethod = "pix";
 let activeOrderId = null;
@@ -561,6 +593,65 @@ window.selectDeliveryMode = function (mode) {
     evaluateDeliveryAndPrice();
 };
 
+// Modelos de um produto (ex.: camisa de jogo Linha / Goleiro)
+function productVariants(p) {
+    return p && Array.isArray(p.variants) ? p.variants.filter(function (v) { return v && v.id; }) : [];
+}
+
+function findVariant(p, variantId) {
+    const list = productVariants(p);
+    for (let i = 0; i < list.length; i++) {
+        if (list[i].id === variantId) return list[i];
+    }
+    return null;
+}
+
+// Nome exibido no carrinho, pedidos e planilha: "Camisa de Jogo (Goleiro)"
+function itemDisplayName(p, variantId) {
+    const v = findVariant(p, variantId);
+    return v ? p.name + " (" + (v.label || v.id) + ")" : p.name;
+}
+
+function renderModalGallery(imgs) {
+    const wrapper = byId("modal-swiper-wrapper");
+    if (!wrapper) return;
+    const list = imgs && imgs.length > 0 ? imgs : ["assets/img/logo-atletica.jpg"];
+    const slides = [];
+    for (let i = 0; i < list.length; i++) {
+        slides.push(
+            '<div class="swiper-slide flex items-center justify-center p-6">' +
+                '<img src="' + esc(list[i]) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="Produto" class="max-w-full max-h-[260px] md:max-h-[420px] object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.5)]">' +
+            '</div>'
+        );
+    }
+    wrapper.innerHTML = slides.join("");
+
+    try {
+        if (modalSwiperInstance) modalSwiperInstance.destroy(true, true);
+        modalSwiperInstance = new Swiper(".modalSwiper", {
+            loop: list.length > 1,
+            grabCursor: true,
+            pagination: { el: ".swiper-pagination", clickable: true },
+            navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" }
+        });
+    } catch (swErr) {
+        console.warn("Swiper modal:", swErr);
+    }
+}
+
+window.selectVariant = function (variantId, btnElement) {
+    const v = findVariant(selectedProduct, variantId);
+    if (!v) return;
+    selectedVariant = v.id;
+    if (byId("variant-error")) byId("variant-error").classList.add("hidden");
+    const allBtns = document.querySelectorAll("#variant-options [data-variant]");
+    for (let i = 0; i < allBtns.length; i++) {
+        allBtns[i].classList.remove("is-active");
+    }
+    if (btnElement) btnElement.classList.add("is-active");
+    if (Array.isArray(v.images) && v.images.length > 0) renderModalGallery(v.images);
+};
+
 window.openProductModal = function (id) {
     selectedProduct = findProduct(id);
 
@@ -570,6 +661,7 @@ window.openProductModal = function (id) {
     }
 
     selectedSize = null;
+    selectedVariant = null;
     selectedDeliveryMode = "lote";
 
     if (byId("modal-product-name")) byId("modal-product-name").textContent = selectedProduct.name;
@@ -581,30 +673,30 @@ window.openProductModal = function (id) {
     if (byId("custom-number-input")) byId("custom-number-input").value = "";
     if (byId("custom-name-counter")) byId("custom-name-counter").textContent = "0/10";
 
-    const wrapper = byId("modal-swiper-wrapper");
-    if (wrapper) {
-        const slides = [];
-        const imgs = selectedProduct.images && selectedProduct.images.length > 0 ? selectedProduct.images : ["assets/img/logo-atletica.jpg"];
-        for (let i = 0; i < imgs.length; i++) {
-            slides.push(
-                '<div class="swiper-slide flex items-center justify-center p-6">' +
-                    '<img src="' + esc(imgs[i]) + '" onerror="this.src=\'https://placehold.co/500x500/1F4229/ccff00?text=FurioZOs\'" alt="Produto" class="max-w-full max-h-[260px] md:max-h-[420px] object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.5)]">' +
-                '</div>'
-            );
-        }
-        wrapper.innerHTML = slides.join("");
-    }
+    renderModalGallery(selectedProduct.images);
 
-    try {
-        if (modalSwiperInstance) modalSwiperInstance.destroy(true, true);
-        modalSwiperInstance = new Swiper(".modalSwiper", {
-            loop: (selectedProduct.images && selectedProduct.images.length > 1),
-            grabCursor: true,
-            pagination: { el: ".swiper-pagination", clickable: true },
-            navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" }
-        });
-    } catch (swErr) {
-        console.warn("Swiper modal:", swErr);
+    const variantContainer = byId("variant-selector-container");
+    const variantOptions = byId("variant-options");
+    const variants = productVariants(selectedProduct);
+    if (byId("variant-error")) byId("variant-error").classList.add("hidden");
+    if (variantContainer && variantOptions && variants.length > 0) {
+        variantContainer.classList.remove("hidden");
+        variantOptions.innerHTML = variants.map(function (v) {
+            const swatch = /^#[0-9a-fA-F]{3,8}$/.test(String(v.swatch || "")) ? v.swatch : "#1F4229";
+            return '<button type="button" data-variant="' + esc(v.id) + '" class="opt-card">' +
+                '<span class="opt-check"></span>' +
+                '<span class="flex items-center gap-3">' +
+                    '<span class="w-7 h-7 shrink-0 border border-bone/40" style="background:' + swatch + '"></span>' +
+                    '<span>' +
+                        '<span class="block font-sport font-black uppercase text-lg leading-none">' + esc(v.label || v.id) + '</span>' +
+                        (v.hint ? '<span class="block label text-smoke mt-1 normal-case tracking-normal">' + esc(v.hint) + '</span>' : '') +
+                    '</span>' +
+                '</span>' +
+            '</button>';
+        }).join("");
+    } else if (variantContainer) {
+        variantContainer.classList.add("hidden");
+        if (variantOptions) variantOptions.innerHTML = "";
     }
 
     const sizeContainer = byId("size-selector-container");
@@ -674,7 +766,7 @@ function refreshCartPrices() {
         item.customFee = customFee;
         item.deliveryFee = deliveryFee;
         item.price = Number(p.price) + customFee + deliveryFee;
-        item.name = p.name;
+        item.name = itemDisplayName(p, item.variant);
         item.quantity = Math.max(1, Math.min(MAX_QTY_PER_ITEM, parseInt(item.quantity, 10) || 1));
     }
 }
@@ -766,6 +858,12 @@ window.addToCart = async function () {
     const rawQty = parseInt(qtyEl ? qtyEl.value : "1", 10);
     const qty = Math.max(1, Math.min(MAX_QTY_PER_ITEM, isNaN(rawQty) ? 1 : rawQty));
 
+    const variantObj = findVariant(selectedProduct, selectedVariant);
+    if (productVariants(selectedProduct).length > 0 && !variantObj) {
+        if (byId("variant-error")) byId("variant-error").classList.remove("hidden");
+        return;
+    }
+
     if (selectedProduct.hasSize && !selectedSize) {
         if (byId("size-error")) byId("size-error").classList.remove("hidden");
         return;
@@ -779,7 +877,8 @@ window.addToCart = async function () {
     const sizeKey = selectedSize ? selectedSize : "unico";
     const nameKey = state.customName ? state.customName : "semnome";
     const numKey = state.customNumber ? state.customNumber : "semnum";
-    const uniqueKey = [selectedProduct.id, sizeKey, nameKey, numKey, selectedDeliveryMode].join("-");
+    const variantKey = variantObj ? variantObj.id : "padrao";
+    const uniqueKey = [selectedProduct.id, variantKey, sizeKey, nameKey, numKey, selectedDeliveryMode].join("-");
 
     let foundIndex = -1;
     for (let i = 0; i < cart.length; i++) {
@@ -802,14 +901,17 @@ window.addToCart = async function () {
     if (foundIndex > -1) {
         cart[foundIndex].quantity = alreadyInCart + qty;
     } else {
+        const variantImgs = variantObj && Array.isArray(variantObj.images) && variantObj.images.length > 0 ? variantObj.images : null;
+        const productImgs = variantImgs || selectedProduct.images;
         cart.push({
             id: selectedProduct.id,
-            name: selectedProduct.name,
+            name: itemDisplayName(selectedProduct, variantObj ? variantObj.id : ""),
+            variant: variantObj ? variantObj.id : "",
             basePrice: Number(selectedProduct.price),
             customFee: state.customFee,
             deliveryFee: deliveryFee,
             price: finalUnitPrice,
-            img: (selectedProduct.images && selectedProduct.images.length > 0) ? selectedProduct.images[0] : "assets/img/logo-atletica.jpg",
+            img: (productImgs && productImgs.length > 0) ? productImgs[0] : "assets/img/logo-atletica.jpg",
             size: selectedSize ? selectedSize : "Único",
             customName: state.customName,
             customNumber: state.customNumber,
@@ -1032,6 +1134,7 @@ function buildCheckoutItems() {
     return cart.map(function (item) {
         return {
             id: item.id,
+            variant: item.variant ? item.variant : "",
             size: item.size,
             customName: item.customName ? item.customName : "",
             customNumber: item.customNumber ? item.customNumber : "",
@@ -1870,6 +1973,12 @@ function bindDelegatedEvents() {
         }
     });
 
+    // Modelos (Linha / Goleiro) no modal de produto
+    on("variant-options", "click", function (e) {
+        const btn = e.target.closest("[data-variant]");
+        if (btn) window.selectVariant(btn.getAttribute("data-variant"), btn);
+    });
+
     // Tamanhos no modal de produto
     on("size-options", "click", function (e) {
         const btn = e.target.closest("[data-size]");
@@ -2468,6 +2577,7 @@ function bindAllEvents() {
                 facRow["Matrícula UERJ"] = matriculaStr;
                 facRow["WhatsApp"] = order.customerPhone ? order.customerPhone : "";
                 facRow["Produto"] = item.name ? item.name : "";
+                facRow["Modelo"] = item.variantLabel ? item.variantLabel : "-";
                 facRow["Tamanho"] = item.size ? item.size : "Único";
                 facRow["Nome Personalizado (Costas)"] = item.customName ? item.customName : "SEM NOME";
                 facRow["Número (Costas)"] = item.customNumber ? item.customNumber : "SEM NÚMERO";
