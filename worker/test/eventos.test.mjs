@@ -442,6 +442,46 @@ await test("concorrência: 12 compras simultâneas em lote de 5 nunca passam do 
     assert.ok(results.every((r) => r.status === 200 || r.status === 409));
 });
 
+await test("uma conta não segura mais de 2 compras aguardando PIX", async () => {
+    seed(ROOT + "/events/limite", { title: "Limite", status: "published", startsAt: inDays(4), endsAt: inDays(4.2), activeBatchId: "x" });
+    seed(ROOT + "/events/limite/batches/x", { name: "Único", order: 1, price: 10, totalQuantity: 50, soldQuantity: 0, reservedQuantity: 0, autoTurn: false });
+    const buy = () => call("POST", "/api/events/checkout", "acumulador", { eventId: "limite", quantity: 1, customer });
+    const first = await buy();
+    assert.equal(first.status, 200, JSON.stringify(first.data));
+    assert.equal((await buy()).status, 200);
+    const third = await buy();
+    assert.equal(third.status, 409);
+    assert.equal(third.data.statusDetail, "too_many_open");
+    assert.equal(read(ROOT + "/events/limite/batches/x").reservedQuantity, 2);
+    // Pagou uma: abre espaço para outra compra
+    assert.equal(await webhook(read(ROOT + "/ticketOrders/" + first.data.orderId).mpPaymentId, "approved"), 200);
+    assert.equal((await buy()).status, 200);
+});
+
+await test("última peça paga por duas pessoas: estoque para em zero e a diretoria é avisada", async () => {
+    seed(ROOT + "/products/p2", { id: "p2", name: "Tirante", price: 20, status: "disponivel", immediateStock: 1, hasSize: false, isShirt: false, images: [] });
+    const items = [{ id: "p2", quantity: 1, deliveryMode: "imediata" }];
+    const a = await call("POST", "/checkout", "loja-a", { customer, payment: { method: "pix" }, items });
+    const b = await call("POST", "/checkout", "loja-b", { customer, payment: { method: "pix" }, items });
+    assert.equal(a.status, 200, JSON.stringify(a.data));
+    assert.equal(b.status, 200, JSON.stringify(b.data));
+    await webhook(read(ROOT + "/orders/" + a.data.orderId).mpPaymentId, "approved", "/webhook/mercadopago");
+    await webhook(read(ROOT + "/orders/" + b.data.orderId).mpPaymentId, "approved", "/webhook/mercadopago");
+    assert.equal(read(ROOT + "/products/p2").immediateStock, 0);
+    assert.equal(read(ROOT + "/orders/" + a.data.orderId).adminNote, undefined);
+    assert.match(read(ROOT + "/orders/" + b.data.orderId).adminNote, /Estoque insuficiente.*Tirante/);
+
+    // Combo com produto sem estoque: o ingresso sai, com aviso no pedido
+    seed(ROOT + "/events/limite/batches/c", { name: "Combo", order: 2, price: 10, comboPrice: 25, comboItems: ["p2"], totalQuantity: 50, soldQuantity: 0, reservedQuantity: 0, autoTurn: false });
+    store.get(ROOT + "/events/limite").fields.activeBatchId = enc("c");
+    const c = await call("POST", "/api/events/checkout", "combo-sem-estoque", { eventId: "limite", quantity: 1, kind: "combo", customer });
+    assert.equal(c.status, 200, JSON.stringify(c.data));
+    await webhook(read(ROOT + "/ticketOrders/" + c.data.orderId).mpPaymentId, "approved");
+    const co = read(ROOT + "/ticketOrders/" + c.data.orderId);
+    assert.equal(co.status, "paid");
+    assert.match(co.adminNote, /Estoque insuficiente.*Tirante/);
+});
+
 console.log("Transferência");
 let ticketId, oldToken;
 await test("titular gera código; quem recebe assume com nova assinatura", async () => {

@@ -2,6 +2,7 @@
 // abrir sem internet. NAO intercepta Firestore, login nem o Worker de pagamento:
 // os dados dos ingressos ficam no IndexedDB, controlados por portaria.js.
 const CACHE = "fz-portaria-v1";
+const NETWORK_WAIT_MS = 3000;
 
 const SHELL = [
     "/portaria",
@@ -93,7 +94,9 @@ self.addEventListener("message", function (event) {
     })());
 });
 
-// Entrega do cache na hora e atualiza em segundo plano (stale-while-revalidate)
+// Arquivos do proprio site: rede primeiro (uma correcao publicada chega na
+// primeira abertura), com a copia guardada se a rede nao responder em 3 s.
+// Bibliotecas de CDN (versao fixa): copia guardada na hora, atualiza depois.
 self.addEventListener("fetch", function (event) {
     const req = event.request;
     if (req.method !== "GET") return;
@@ -111,6 +114,12 @@ self.addEventListener("fetch", function (event) {
             return res;
         }).catch(function () { return null; });
 
+        if (cached && url.origin === self.location.origin) {
+            const fresh = await Promise.race([refresh, new Promise(function (r) { setTimeout(r, NETWORK_WAIT_MS, null); })]);
+            if (fresh && fresh.ok) return fresh;
+            event.waitUntil(refresh);
+            return cached;
+        }
         if (cached) {
             event.waitUntil(refresh);
             return cached;

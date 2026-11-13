@@ -467,7 +467,13 @@ async function reconcilePayment(env, payment) {
         const saved = await fsPatch(env, path, patch, snap.updateTime);
         if (!saved) continue;
 
-        if (mustApplyStock) await applyImmediateStock(env, order.items || []);
+        if (mustApplyStock) {
+            const short = await applyImmediateStock(env, order.items || []);
+            if (short.length) {
+                patch.adminNote = stockShortNote(short);
+                await fsPatch(env, path, { adminNote: patch.adminNote });
+            }
+        }
         return { order: Object.assign({}, order, patch), status: next };
     }
 
@@ -482,17 +488,11 @@ async function applyImmediateStock(env, items) {
         }
     }
 
-    for (const productId of Object.keys(perProduct)) {
-        const path = productsCollectionPath(env) + "/" + encodeURIComponent(productId);
-        for (let attempt = 0; attempt < 4; attempt++) {
-            const snap = await fsGet(env, path);
-            if (!snap) break;
-            const current = Number(snap.data.immediateStock || 0);
-            const next = Math.max(0, current - perProduct[productId]);
-            const ok = await fsPatch(env, path, { immediateStock: next }, snap.updateTime);
-            if (ok) break;
-        }
-    }
+    return decrementProductStock(env, perProduct);
+}
+
+function stockShortNote(names) {
+    return ("Estoque insuficiente na hora do pagamento: " + names.join(", ") + ". Conferir antes de entregar.").slice(0, 500);
 }
 
 async function safeCancel(env, orderPath, reason) {
@@ -1026,6 +1026,7 @@ function timingSafeEqual(a, b) {
 const TICKET_PIX_MINUTES = 10;
 const RESERVATION_GRACE_MS = 2 * 60 * 1000; // folga antes de devolver a vaga
 const MAX_TICKETS_PER_ORDER = 5;
+const MAX_OPEN_RESERVATIONS = 2; // compras aguardando PIX ao mesmo tempo, por conta
 const MAX_COURTESY_PER_REQUEST = 20;
 const TRANSFER_OFFER_HOURS = 48;
 const EVENT_ID_REGEX = /^[a-z0-9][a-z0-9-]{1,60}$/;
@@ -1271,6 +1272,15 @@ async function handleEventCheckout(request, env, url) {
     const batchId = String(ev.activeBatchId || "");
     if (!BATCH_ID_REGEX.test(batchId)) throw new HttpError(400, "Este evento ainda não tem lote aberto.");
     const batchPath = batchDocPath(env, eventId, batchId);
+
+    // Sem isto uma conta seguraria dezenas de vagas sem pagar (cada reserva dura 10 min)
+    const mine = await fsQueryEq(env, dataRoot(env), "ticketOrders", "userId", user.sub, 300);
+    const open = mine.filter(function (row) {
+        return row.data.status === TORDER.RESERVED && Number(row.data.expiresAtMs || 0) + RESERVATION_GRACE_MS > Date.now();
+    }).length;
+    if (open >= MAX_OPEN_RESERVATIONS) {
+        throw new HttpError(409, "Você já tem " + open + " compras aguardando o PIX. Pague uma delas ou espere expirarem (10 minutos).", "too_many_open");
+    }
 
     const isMember = await isMemberUser(env, user.sub);
     const nowMs = Date.now();
@@ -1630,7 +1640,11 @@ async function reconcileTicketPayment(env, payment) {
                 try {
                     const perProduct = {};
                     for (const pid of order.comboItems || []) perProduct[pid] = (perProduct[pid] || 0) + qty;
-                    await decrementProductStock(env, perProduct);
+                    const short = await decrementProductStock(env, perProduct);
+                    if (short.length) {
+                        paid.adminNote = ((paid.adminNote ? paid.adminNote + " " : "") + stockShortNote(short)).slice(0, 500);
+                        await fsPatch(env, path, { adminNote: paid.adminNote });
+                    }
                 } catch (e) {
                     console.error("estoque do combo:", e && e.message ? e.message : e);
                 }
@@ -1700,16 +1714,24 @@ async function maybeTurnBatch(env, eventId, batchId) {
     return false;
 }
 
+// Baixa o estoque (nunca abaixo de zero) e devolve os nomes dos produtos que
+// nao tinham unidades suficientes: dois pagamentos podem disputar a ultima peca.
 async function decrementProductStock(env, perProduct) {
+    const short = [];
     for (const productId of Object.keys(perProduct)) {
         const path = productsCollectionPath(env) + "/" + encodeURIComponent(productId);
         for (let attempt = 0; attempt < 4; attempt++) {
             const snap = await fsGet(env, path);
             if (!snap) break;
-            const next = Math.max(0, Number(snap.data.immediateStock || 0) - perProduct[productId]);
-            if (await fsPatch(env, path, { immediateStock: next }, snap.updateTime)) break;
+            const current = Number(snap.data.immediateStock || 0);
+            const next = Math.max(0, current - perProduct[productId]);
+            if (await fsPatch(env, path, { immediateStock: next }, snap.updateTime)) {
+                if (current < perProduct[productId]) short.push(String(snap.data.name || productId));
+                break;
+            }
         }
     }
+    return short;
 }
 
 // ============================================================================

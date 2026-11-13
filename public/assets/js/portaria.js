@@ -528,6 +528,12 @@ async function handleToken(raw) {
 
         let t = state.tickets.get(ticketId);
         if (!t && navigator.onLine) t = await fetchTicketOnline(ticketId);
+        if (t === false) {
+            // O servidor respondeu que nao existe: assinatura verdadeira sem ingresso
+            // so sai de quem tem a chave do evento. Sem botao de liberacao.
+            bad("Ingresso inexistente", "", "A assinatura confere, mas este ingresso não existe no sistema. NÃO libere a entrada e avise a diretoria.");
+            return;
+        }
         if (!t) {
             addLog("warn", "Fora da lista", "");
             showResult({
@@ -578,13 +584,15 @@ async function handleToken(raw) {
     }
 }
 
+// Devolve o ingresso, false (o servidor confirmou que nao existe neste evento)
+// ou null (sem resposta a tempo: nao da para afirmar nada)
 function fetchTicketOnline(ticketId) {
     // Ingresso vendido depois do ultimo download: tenta buscar, sem travar a fila
     const timeout = new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2500); });
     const load = getDoc(ticketRef(ticketId)).then(async function (snap) {
-        if (!snap.exists()) return null;
+        if (!snap.exists()) return false;
         const t = overlayOne(normalizeTicket(snap.id, snap.data()));
-        if (t.eventId !== state.eventId) return null;
+        if (t.eventId !== state.eventId) return false;
         state.tickets.set(t.id, t);
         await idbPut("tickets", t);
         return t;
