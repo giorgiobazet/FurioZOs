@@ -1,0 +1,15 @@
+{
+  "name": "Portaria FurioZOs",
+  "short_name": "Portaria FZ",
+  "description": "Leitura de ingressos da Atlética FurioZOs, com funcionamento sem internet.",
+  "start_url": "/portaria",
+  "scope": "/portaria",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050b07",
+  "theme_color": "#050b07",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/assets/img/logo-atletica.jpg", "sizes": "any", "type": "image/jpeg", "purpose": "any" }
+  ]
+}

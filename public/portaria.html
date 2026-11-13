@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#050b07">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Portaria FZ">
+    <title>Portaria • FurioZOs</title>
+    <link rel="icon" href="/assets/img/logo-atletica.jpg">
+    <link rel="apple-touch-icon" href="/assets/img/logo-atletica.jpg">
+    <link rel="manifest" href="/portaria.webmanifest">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Big+Shoulders+Stencil+Display:wght@800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body class="text-bone antialiased min-h-screen bg-ink pt-body">
+
+    <header class="sticky top-0 z-40 bg-ink/95 backdrop-blur border-b border-neon/30">
+        <div class="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="w-9 h-9 rounded-full overflow-hidden ring-2 ring-neon/70 shrink-0 bg-white">
+                    <img src="/assets/img/logo-atletica.jpg" alt="" class="w-full h-full object-cover scale-[1.22]">
+                </span>
+                <span class="min-w-0">
+                    <span class="label text-neon block">Portaria</span>
+                    <span id="pt-event-name" class="font-sport font-black uppercase text-lg leading-none block truncate">FurioZOs</span>
+                </span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <span id="pt-net" class="pt-net" title="Conexão"><i></i><b>—</b></span>
+                <button type="button" id="pt-menu-btn" class="hidden label border border-ash text-bone hover:border-neon hover:text-neon px-3 py-2 transition-colors" aria-label="Opções"><i class="fa-solid fa-gear"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-2xl mx-auto px-4 py-5">
+        <div id="pt-loading" class="py-24 text-center label text-smoke"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Verificando acesso...</div>
+
+        <!-- Login -->
+        <div id="pt-login" class="hidden max-w-md mx-auto fz-panel">
+            <div class="p-8 text-center bg-furiozo-dark relative overflow-hidden">
+                <div class="absolute inset-0 hatch pointer-events-none"></div>
+                <span class="relative label text-neon">Equipe da festa</span>
+                <h1 class="relative font-sport text-4xl font-black uppercase leading-none mt-2">Entrar na <span class="text-neon">portaria</span></h1>
+            </div>
+            <form id="pt-login-form" class="p-6 space-y-4">
+                <div><label for="pt-email" class="fz-label">E-mail</label><input type="email" id="pt-email" required autocomplete="username" class="fz-input"></div>
+                <div><label for="pt-pass" class="fz-label">Senha</label><input type="password" id="pt-pass" required autocomplete="current-password" class="fz-input"></div>
+                <p id="pt-login-error" class="hidden text-sm text-red-300 border border-red-400/40 bg-red-400/10 px-3 py-2"></p>
+                <button type="submit" class="btn-razor btn-razor--solid w-full"><span>Entrar</span><span class="arrow">→</span></button>
+                <p class="text-xs text-smoke text-center">É a mesma conta do site da atlética.</p>
+            </form>
+        </div>
+
+        <!-- Sem permissao -->
+        <div id="pt-denied" class="hidden max-w-md mx-auto fz-panel p-8 text-center space-y-4">
+            <i class="fa-solid fa-lock text-4xl text-smoke"></i>
+            <h1 class="font-sport text-3xl font-black uppercase leading-none">Conta sem acesso à portaria</h1>
+            <p class="text-sm text-smoke">Peça para a diretoria liberar esta conta em <span class="text-bone">Painel → Equipe e sócios</span>, informando o e-mail ou o código abaixo.</p>
+            <div class="border border-ash bg-coal p-3 text-left space-y-1">
+                <span class="fz-label !mb-0">E-mail</span>
+                <p id="pt-denied-email" class="text-sm break-all"></p>
+                <span class="fz-label !mb-0 pt-2">Código da conta (UID)</span>
+                <p id="pt-denied-uid" class="font-mono text-xs break-all text-neon"></p>
+            </div>
+            <div class="flex flex-wrap justify-center gap-2">
+                <button type="button" id="pt-copy-uid" class="label border border-neon text-neon hover:bg-neon hover:text-ink px-4 py-2 transition-colors">Copiar código</button>
+                <button type="button" id="pt-logout-denied" class="label border border-ash text-bone hover:border-neon hover:text-neon px-4 py-2 transition-colors">Trocar de conta</button>
+            </div>
+        </div>
+
+        <!-- App -->
+        <div id="pt-app" class="hidden space-y-4">
+            <!-- Evento + sincronizacao -->
+            <section class="fz-panel p-4 space-y-3">
+                <div>
+                    <label for="pt-event" class="fz-label">Evento</label>
+                    <select id="pt-event" class="fz-input"></select>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <p id="pt-sync-info" class="text-xs text-smoke min-w-0">Escolha o evento e baixe a lista antes de abrir os portões.</p>
+                    <button type="button" id="pt-sync" class="shrink-0 label bg-neon text-ink border border-neon px-4 py-3 font-bold disabled:opacity-40"><i class="fa-solid fa-cloud-arrow-down mr-1"></i> <span>Baixar lista</span></button>
+                </div>
+                <p id="pt-offline-ready" class="hidden text-xs text-neon"><i class="fa-solid fa-circle-check mr-1"></i> Aparelho pronto para funcionar sem internet.</p>
+            </section>
+
+            <!-- Contadores -->
+            <section class="grid grid-cols-3 gap-2">
+                <div class="fz-panel p-3 text-center"><span class="fz-label !mb-0">Entraram</span><p id="pt-count-in" class="font-sport font-black text-3xl leading-none text-neon mt-1">0</p></div>
+                <div class="fz-panel p-3 text-center"><span class="fz-label !mb-0">Vendidos</span><p id="pt-count-total" class="font-sport font-black text-3xl leading-none mt-1">0</p></div>
+                <div class="fz-panel p-3 text-center"><span class="fz-label !mb-0">A enviar</span><p id="pt-count-queue" class="font-sport font-black text-3xl leading-none mt-1">0</p></div>
+            </section>
+            <div class="ev-bar ev-bar--thin"><span id="pt-progress" style="width:0%"></span></div>
+
+            <!-- Abas -->
+            <div class="flex border-b border-ash">
+                <button type="button" data-pt-tab="scan" class="seg-tab is-active"><i class="fa-solid fa-qrcode mr-1"></i> Leitor</button>
+                <button type="button" data-pt-tab="busca" class="seg-tab"><i class="fa-solid fa-magnifying-glass mr-1"></i> Busca</button>
+                <button type="button" data-pt-tab="log" class="seg-tab"><i class="fa-solid fa-list-check mr-1"></i> Registro <span id="pt-conflict-badge" class="hidden ml-1 bg-red-500 text-white px-1.5">0</span></button>
+            </div>
+
+            <!-- Leitor -->
+            <section id="pt-tab-scan" class="space-y-3">
+                <div class="pt-viewport">
+                    <video id="pt-video" playsinline muted></video>
+                    <div class="pt-reticle"><i></i><i></i><i></i><i></i></div>
+                    <div id="pt-cam-off" class="pt-cam-off">
+                        <i class="fa-solid fa-camera text-4xl text-smoke"></i>
+                        <p id="pt-cam-msg" class="text-sm text-smoke px-6 text-center">Baixe a lista do evento e ligue a câmera para ler os ingressos.</p>
+                        <button type="button" id="pt-cam-start" class="btn-razor btn-razor--solid !text-base"><span>Ligar câmera</span><span class="arrow">→</span></button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                    <p id="pt-last" class="text-xs text-smoke min-w-0 truncate">Nenhuma leitura ainda.</p>
+                    <div class="flex gap-2 shrink-0">
+                        <button type="button" id="pt-torch" class="hidden label border border-ash text-bone px-3 py-2"><i class="fa-solid fa-bolt"></i> Luz</button>
+                        <button type="button" id="pt-cam-stop" class="hidden label border border-ash text-bone px-3 py-2">Desligar câmera</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Busca manual -->
+            <section id="pt-tab-busca" class="hidden space-y-3">
+                <div>
+                    <label for="pt-search" class="fz-label">Nome, CPF ou matrícula</label>
+                    <input type="search" id="pt-search" class="fz-input" placeholder="Ex.: Maria, 456789, 2023..." autocomplete="off">
+                    <p class="text-xs text-smoke mt-1">O CPF fica mascarado: busque pelos 6 números do meio.</p>
+                </div>
+                <div id="pt-search-results" class="space-y-2"></div>
+            </section>
+
+            <!-- Registro -->
+            <section id="pt-tab-log" class="hidden space-y-4">
+                <div id="pt-conflicts"></div>
+                <div>
+                    <span class="fz-label">Últimas leituras neste aparelho</span>
+                    <div id="pt-log" class="space-y-1"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Opcoes -->
+    <div id="pt-menu" class="hidden fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4">
+        <div class="fz-panel w-full max-w-sm p-5 space-y-3">
+            <div class="flex items-center justify-between"><span class="font-sport font-black uppercase text-2xl">Opções</span><button type="button" id="pt-menu-close" class="fz-close" aria-label="Fechar">&times;</button></div>
+            <p id="pt-user" class="text-xs text-smoke break-all"></p>
+            <label class="flex items-center justify-between gap-3 border border-ash p-3 text-sm"><span>Som na leitura</span><input type="checkbox" id="pt-sound" checked class="w-5 h-5 accent-[#ccff00]"></label>
+            <button type="button" id="pt-force-sync" class="w-full label border border-ash text-bone hover:border-neon hover:text-neon px-4 py-3">Enviar leituras pendentes agora</button>
+            <a id="pt-admin-link" href="/admin/eventos" class="hidden block text-center w-full label border border-ash text-bone hover:border-neon hover:text-neon px-4 py-3">Painel da diretoria</a>
+            <button type="button" id="pt-wipe" class="w-full label border border-red-400/50 text-red-300 px-4 py-3">Apagar dados deste aparelho</button>
+            <button type="button" id="pt-logout" class="w-full label border border-ash text-bone hover:border-neon hover:text-neon px-4 py-3">Sair da conta</button>
+        </div>
+    </div>
+
+    <!-- Resultado da leitura (tela cheia) -->
+    <div id="pt-result" class="pt-result hidden" role="alert" aria-live="assertive">
+        <div class="pt-result__inner">
+            <i id="pt-result-icon" class="fa-solid fa-circle-check"></i>
+            <h2 id="pt-result-title" class="font-sport font-black uppercase"></h2>
+            <p id="pt-result-name" class="pt-result__name"></p>
+            <p id="pt-result-detail" class="pt-result__detail"></p>
+            <div id="pt-result-actions" class="pt-result__actions"></div>
+            <span id="pt-result-hint" class="label">Toque para continuar</span>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+    <script type="module" src="/assets/js/portaria.js"></script>
+</body>
+</html>

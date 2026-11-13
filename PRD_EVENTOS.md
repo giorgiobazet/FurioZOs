@@ -155,3 +155,16 @@ Tudo fica sob o mesmo namespace da loja, para reaproveitar regras e convenções
 - **Site (`/`)**: seção "Nossas Festas" (só com evento publicado), página do evento em `/?evento={id}`, PIX com timer e aba "Meus ingressos" no perfil — `public/assets/js/eventos.js`. Link de transferência: `/#transferir={código}`.
 - **Painel da diretoria (`/admin/eventos`)**: `public/admin/eventos.html` + `public/assets/js/admin-eventos.js`. Abas por evento: Painel (KPIs, break-even, portaria ao vivo, virada de lote, custos), Dados, Lotes, Cortesias, Vendas (com exportação CSV); e aba geral Equipe e sócios.
 - **Break-even:** receita líquida = soma dos pedidos pagos − taxa do PIX (padrão 0,99%, ajustável por evento e guardada em `private/finance.feePercent`), comparada à soma de `private/finance.costs`.
+
+### A.8 Portaria offline-first (Milestone 3)
+
+- **Arquivos**: `public/portaria.html`, `public/assets/js/portaria.js`, `public/portaria-sw.js` (service worker com escopo `/portaria`) e `public/portaria.webmanifest` (instalável na tela inicial).
+- **Acesso**: mesma conta do site; libera para `admins/{uid}` ou `staff/{uid}`. O papel fica em cache no aparelho para abrir sem rede. A tela de acesso negado mostra e-mail e UID para a diretoria cadastrar em *Equipe e sócios*.
+- **Baixar lista** (com internet): busca a chave do evento no Worker (`/api/events/{id}/portaria-key`), importa como chave **não exportável** e grava no IndexedDB (`fz-portaria`: `tickets`, `meta`, `queue`, `conflicts`) junto com todos os ingressos do evento. Com rede, um `onSnapshot` mantém a lista atualizada (vendas de última hora, transferências, entradas de outros aparelhos).
+- **Leitura**: `BarcodeDetector` quando o navegador tem; senão `jsQR` 1.4.0 (CDN com SRI) no lugar do `html5-qrcode` — mais leve e roda sobre o mesmo `<video>`. Cada QR é conferido localmente: formato → evento → HMAC → lista → assinatura atual → status.
+  - Verde + bip: entrada liberada (ou kit liberado, para o QR `k1`).
+  - Vermelho: já entrou (com nome e horário), QR antigo (ingresso transferido), cancelado/estornado, outro evento, **assinatura inválida** (possível fraude).
+  - Âmbar: assinatura verdadeira mas ingresso fora da lista baixada; permite liberação manual, conferida depois.
+- **syncQueue**: toda entrada/retirada de kit é gravada primeiro no aparelho e entra na fila; sobe por transação do Firestore quando há rede (a cada 15 s, ao voltar a conexão ou pelo menu). Se o servidor já tinha entrada de outro aparelho, QR antigo ou ingresso cancelado, a leitura vira **conflito** na aba Registro, para a diretoria conferir.
+- **Busca manual**: nome, 6 dígitos do meio do CPF (o CPF fica mascarado) ou matrícula; entrada e kit com confirmação em dois toques.
+- **Cabeçalhos**: `Permissions-Policy` passou a `camera=(self)`; `connect-src` ganhou os CDNs já usados (para o service worker guardar a casca do app).

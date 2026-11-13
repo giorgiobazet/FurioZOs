@@ -578,3 +578,38 @@ input[type="number"]::-webkit-outer-spin-button {
     .soon-clover path { animation: none !important; stroke-dashoffset: 0; }
     .js-reveal .reveal, .js-reveal .reveal-slash { opacity: 1 !important; transform: none !important; clip-path: none !important; }
 }
+
+/* ==========================================================================
+   PORTARIA (/portaria): leitor de ingressos
+   ========================================================================== */
+.pt-body { padding-bottom: env(safe-area-inset-bottom); }
+.pt-net { display: inline-flex; align-items: center; gap: .4rem; font-family: 'JetBrains Mono', monospace; font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: #fca5a5; border: 1px solid rgba(248, 113, 113, 0.45); padding: .45rem .6rem; }
+.pt-net i { width: 8px; height: 8px; border-radius: 50%; background: #f87171; }
+.pt-net b { font-weight: 600; }
+.pt-net.is-on { color: var(--neon); border-color: rgba(204, 255, 0, 0.4); }
+.pt-net.is-on i { background: var(--neon); box-shadow: 0 0 8px rgba(204, 255, 0, 0.8); }
+
+.pt-viewport { position: relative; aspect-ratio: 1 / 1; max-height: 62vh; width: 100%; margin: 0 auto; background: #000; border: 1px solid var(--ash); overflow: hidden; }
+.pt-viewport video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pt-reticle { position: absolute; inset: 14%; pointer-events: none; }
+.pt-reticle i { position: absolute; width: 34px; height: 34px; border: 3px solid var(--neon); }
+.pt-reticle i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.pt-reticle i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.pt-reticle i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.pt-reticle i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+.pt-cam-off { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: var(--coal); }
+.pt-cam-off.hidden { display: none; }
+
+.pt-result { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 1.5rem; text-align: center; cursor: pointer; }
+.pt-result.hidden { display: none; }
+.pt-result__inner { display: flex; flex-direction: column; align-items: center; gap: .75rem; max-width: 30rem; }
+.pt-result__inner > i { font-size: 5.5rem; line-height: 1; }
+.pt-result h2 { font-size: clamp(2.6rem, 11vw, 4.5rem); line-height: .9; }
+.pt-result__name { font-size: 1.5rem; font-weight: 700; word-break: break-word; }
+.pt-result__detail { font-size: 1rem; font-weight: 500; opacity: .92; }
+.pt-result__actions { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; }
+.pt-result__btn { font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: .1em; font-size: .8rem; font-weight: 600; padding: .9rem 1.4rem; border: 2px solid currentColor; background: rgba(0, 0, 0, 0.15); }
+.pt-result .label { opacity: .75; min-height: 1em; }
+.pt-result--ok { background: var(--neon); color: var(--ink); }
+.pt-result--bad { background: #b91c1c; color: #fff; }
+.pt-result--warn { background: #f59e0b; color: #1a1202; }
