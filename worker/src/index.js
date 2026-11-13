@@ -83,14 +83,14 @@ export default {
         const cors = corsHeaders(request, env);
 
         // Limite por IP. Alunos na mesma rede (Wi-Fi da UERJ) dividem o IP e a
-        // tela do PIX consulta o status a cada 5 s, por isso o teto e generoso.
+        // tela do PIX consulta o status a cada 10 s, por isso o teto e generoso.
         // Camada 1: binding da Cloudflare (compartilhado na localidade).
         // Camada 2: memoria da instancia (vale mesmo sem o binding).
         const isWebhookPath = url.pathname === "/webhook/mercadopago" || url.pathname === "/api/webhooks/mercadopago";
         if (request.method !== "OPTIONS" && !isWebhookPath) {
             const ip = request.headers.get("CF-Connecting-IP") || "unknown";
             const blocked = !(await bindingAllows(env.IP_LIMITER, "ip:" + ip))
-                || isRateLimited("ip:" + ip, 120, 60 * 1000);
+                || isRateLimited("ip:" + ip, 600, 60 * 1000);
             if (blocked) {
                 return json({ message: "Muitas requisições. Aguarde um minuto." }, 429, cors || {});
             }

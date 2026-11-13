@@ -367,12 +367,14 @@ function normalizeTicket(id, v) {
     };
 }
 
-// Leituras que ainda nao subiram valem mais que a copia vinda do servidor
+// Leituras que ainda nao subiram valem mais que a copia vinda do servidor,
+// mas so se foram feitas com o QR atual (um QR antigo, de ingresso transferido,
+// nao pode marcar como usado o ingresso de quem recebeu)
 function overlayOne(t) {
     for (const q of state.queue) {
         if (q.ticketId !== t.id) continue;
-        if (q.type === "checkin" && t.status === "valid") { t.status = "used"; t.checkedInAtMs = q.atMs; }
-        if (q.type === "kit" && !t.comboRedeemed) { t.comboRedeemed = true; t.comboRedeemedAtMs = q.atMs; }
+        if (q.type === "checkin" && t.status === "valid" && q.token === t.qrSignature) { t.status = "used"; t.checkedInAtMs = q.atMs; }
+        if (q.type === "kit" && !t.comboRedeemed && q.token === t.kitSignature) { t.comboRedeemed = true; t.comboRedeemedAtMs = q.atMs; }
     }
     return t;
 }
@@ -865,6 +867,8 @@ async function flushQueue() {
                 const c = { type: item.type, ticketId: item.ticketId, eventId: item.eventId, atMs: item.atMs, name: outcome.name || "", message: outcome.conflict };
                 c.cid = await idbAdd("conflicts", c);
                 state.conflicts.push(c);
+                // O servidor recusou: a copia local volta a ser a do servidor
+                await fetchTicketOnline(item.ticketId);
             }
             renderCounters();
         }
@@ -1162,6 +1166,7 @@ if (IS_LOCAL) {
     window.__fzPortariaDebug = {
         state: state,
         handleToken: handleToken,
+        overlayOne: overlayOne,
         async load(eventId, rawKeyBytes, tickets) {
             state.user = state.user || { uid: "debugstaff0000000000000001", email: "portaria@teste.local" };
             state.role = "admin";

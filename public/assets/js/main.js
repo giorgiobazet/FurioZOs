@@ -2430,7 +2430,7 @@ function bindAllEvents() {
                 stopPixPolling();
                 pixPollingInterval = setInterval(function () {
                     checkOrderStatus(activeOrderId, true);
-                }, 5000);
+                }, 10000);
 
                 const verifyBtn = byId("btn-verify-pix-now");
                 if (verifyBtn) {
