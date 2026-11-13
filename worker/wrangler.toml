@@ -25,9 +25,16 @@ namespace_id = "1002"
 FIREBASE_PROJECT_ID = "atletica-furiozos"
 APP_ID = "furiozos-app"
 ALLOWED_ORIGINS = "https://atletica-furiozos.web.app,https://atletica-furiozos.firebaseapp.com"
+# Bilheteria: ingresso comum pode ser transferido ate X horas antes do evento
+TRANSFER_CUTOFF_HOURS = "6"
+
+# Bilheteria: a cada 2 minutos devolve ao lote as vagas de PIX que venceram
+[triggers]
+crons = ["*/2 * * * *"]
 
 # Secrets (NAO coloque aqui). Cadastre com:
 #   npx wrangler secret put MP_ACCESS_TOKEN
 #   npx wrangler secret put GCP_SA_CLIENT_EMAIL
 #   npx wrangler secret put GCP_SA_PRIVATE_KEY
 #   npx wrangler secret put MP_WEBHOOK_SECRET
+#   npx wrangler secret put TICKET_SECRET_KEY   (assinatura dos ingressos; texto aleatorio longo)

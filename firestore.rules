@@ -95,5 +95,105 @@ service cloud.firestore {
         && optStr(request.resource.data, 'deliveredAtISO', 40);
       allow delete: if isAdmin();
     }
+
+    // =====================================================================
+    // EVENTOS, BILHETERIA E PORTARIA (ver PRD_EVENTOS.md)
+    // =====================================================================
+
+    // Equipe da portaria = admin OU documento artifacts/furiozos-app/staff/{UID}
+    function isStaff() {
+      return isAdmin()
+        || (registered()
+            && exists(/databases/$(database)/documents/artifacts/furiozos-app/staff/$(request.auth.uid)));
+    }
+
+    // Equipe da portaria e socios: a diretoria gerencia; cada um le so o proprio registro
+    match /artifacts/{appId}/staff/{uid} {
+      allow read: if isAdmin() || (registered() && request.auth.uid == uid);
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'email', 'addedBy', 'addedAt'])
+        && optStr(request.resource.data, 'name', 120)
+        && optStr(request.resource.data, 'email', 200);
+    }
+
+    match /artifacts/{appId}/members/{uid} {
+      allow read: if isAdmin() || (registered() && request.auth.uid == uid);
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'email', 'matricula', 'addedBy', 'addedAt'])
+        && optStr(request.resource.data, 'name', 120)
+        && optStr(request.resource.data, 'email', 200)
+        && optStr(request.resource.data, 'matricula', 20);
+    }
+
+    // Eventos: o publico so enxerga o que ja foi publicado; rascunho e so da diretoria
+    match /artifacts/{appId}/public/data/events/{eventId} {
+      allow read: if resource.data.status in ['published', 'paused', 'finished'] || isStaff();
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.status in ['draft', 'published', 'paused', 'finished']
+        && request.resource.data.startsAt is timestamp
+        && request.resource.data.endsAt is timestamp
+        && optStr(request.resource.data, 'description', 5000)
+        && optStr(request.resource.data, 'location', 300)
+        && optStr(request.resource.data, 'mapUrl', 500)
+        && optStr(request.resource.data, 'bannerUrl', 500)
+        && optStr(request.resource.data, 'activeBatchId', 40);
+
+      // Lotes: leitura publica (barra de ocupacao). Os contadores de vendidos e
+      // reservados so mudam pelo Worker (conta de servico), nunca pelo navegador.
+      match /batches/{batchId} {
+        function validBatch(d) {
+          return d.name is string && d.name.size() > 0 && d.name.size() <= 80
+            && d.order is int && d.order >= 1 && d.order <= 100
+            && d.price is number && d.price > 0 && d.price <= 10000
+            && (!('memberPrice' in d) || (d.memberPrice is number && d.memberPrice >= 0 && d.memberPrice <= 10000))
+            && (!('comboPrice' in d) || (d.comboPrice is number && d.comboPrice >= 0 && d.comboPrice <= 10000))
+            && d.totalQuantity is int && d.totalQuantity >= 0 && d.totalQuantity <= 100000
+            && d.soldQuantity is int && d.reservedQuantity is int
+            && d.autoTurn is bool
+            && (!('comboItems' in d) || (d.comboItems is list && d.comboItems.size() <= 10));
+        }
+        allow read: if true;
+        allow create: if isAdmin() && validBatch(request.resource.data)
+          && request.resource.data.soldQuantity == 0
+          && request.resource.data.reservedQuantity == 0;
+        allow update: if isAdmin() && validBatch(request.resource.data)
+          && request.resource.data.soldQuantity == resource.data.soldQuantity
+          && request.resource.data.reservedQuantity == resource.data.reservedQuantity;
+        allow delete: if isAdmin()
+          && resource.data.soldQuantity == 0 && resource.data.reservedQuantity == 0;
+      }
+
+      // Custos da festa (break-even): so a diretoria
+      match /private/{docId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Ingressos: emitidos e assinados SOMENTE pelo Worker. O titular le o proprio;
+    // a portaria le todos e so consegue marcar entrada / retirada do kit.
+    match /artifacts/{appId}/public/data/tickets/{ticketId} {
+      allow read: if (registered() && resource.data.ownerUid == request.auth.uid) || isStaff();
+      allow create, delete: if false;
+      allow update: if isStaff()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'checkedInAt', 'checkedInBy', 'comboRedeemed', 'comboRedeemedAt', 'comboRedeemedBy'])
+        && resource.data.status in ['valid', 'used']
+        && (request.resource.data.status == resource.data.status
+            || (resource.data.status == 'valid' && request.resource.data.status == 'used'))
+        && request.resource.data.comboRedeemed is bool;
+    }
+
+    // Pedidos de ingresso: criados e confirmados SOMENTE pelo Worker
+    match /artifacts/{appId}/public/data/ticketOrders/{orderId} {
+      allow read: if isAdmin()
+        || (registered() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
   }
 }
