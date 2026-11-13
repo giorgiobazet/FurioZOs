@@ -66,6 +66,7 @@
                     <a href="#sobre" class="nav-link label flex gap-2 text-bone/90 hover:text-neon transition-colors"><span class="opacity-40">01</span><span class="relative">História<span class="nav-underline absolute -bottom-1 left-0 h-px w-full bg-current"></span></span></a>
                     <a href="#gestao" class="nav-link label flex gap-2 text-bone/90 hover:text-neon transition-colors"><span class="opacity-40">02</span><span class="relative">Gestão<span class="nav-underline absolute -bottom-1 left-0 h-px w-full bg-current"></span></span></a>
                     <a href="#produtos" class="nav-link label flex gap-2 text-bone/90 hover:text-neon transition-colors"><span class="opacity-40">03</span><span class="relative">Produtos<span class="nav-underline absolute -bottom-1 left-0 h-px w-full bg-current"></span></span></a>
+                    <a href="#eventos" id="nav-eventos" style="display:none" class="nav-link label flex gap-2 text-bone/90 hover:text-neon transition-colors"><span class="opacity-40">04</span><span class="relative">Eventos<span class="nav-underline absolute -bottom-1 left-0 h-px w-full bg-current"></span></span></a>
 
                     <!-- Botão Painel Admin -->
                     <button id="btn-admin-nav" type="button" class="hidden label bg-neon/10 text-neon border border-neon/60 hover:bg-neon hover:text-ink px-3 py-2 transition-all items-center gap-1.5">
@@ -114,6 +115,7 @@
             <a href="#sobre" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">01</span>História</a>
             <a href="#gestao" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">02</span>Gestão</a>
             <a href="#produtos" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">03</span>Produtos</a>
+            <a href="#eventos" id="nav-eventos-mobile" style="display:none" class="flex items-baseline gap-3 border-b border-bone/15 py-2 font-sport font-black uppercase text-[15vw] leading-[0.9] text-bone hover:text-neon"><span class="label text-neon">04</span>Eventos</a>
             <div class="mt-auto pt-8 space-y-2">
                 <button id="btn-admin-mobile" type="button" class="hidden w-full text-left px-4 py-3 label bg-neon/15 text-neon border border-neon">
                     <i class="fa-solid fa-gauge-high mr-2"></i> Painel Diretoria
@@ -506,6 +508,22 @@
 
                 <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 </div>
+            </div>
+        </section>
+        <!-- Eventos (aparece so quando ha evento publicado) -->
+        <section id="eventos" class="scroll-mt-20 py-28 relative z-10 border-t border-ash" style="display:none">
+            <div aria-hidden="true" class="pointer-events-none absolute top-0 right-0 w-[45vw] h-[45vw] rounded-full bg-neon/[0.05] blur-[140px]"></div>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+                <div class="mb-12 flex flex-wrap items-end justify-between gap-6">
+                    <h2 class="font-sport font-black uppercase leading-[0.86] text-[clamp(3.6rem,12vw,10rem)]">
+                        Nossas<br><span class="text-outline-neon">Festas</span>
+                    </h2>
+                    <p class="max-w-xs text-smoke">
+                        <span class="label text-neon">04 — Bilheteria oficial</span><br>
+                        Ingresso direto com a atlética, sem taxa de plataforma. Pagou no PIX, o QR Code cai na sua conta.
+                    </p>
+                </div>
+                <div id="events-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></div>
             </div>
         </section>
     </main>
@@ -917,6 +935,9 @@
                 <button type="button" id="tab-profile-orders" onclick="window.switchProfileTab('pedidos')" class="seg-tab">
                     <i class="fa-solid fa-bag-shopping mr-1"></i> Meus pedidos
                 </button>
+                <button type="button" id="tab-profile-tickets" onclick="window.switchProfileTab('ingressos')" class="seg-tab">
+                    <i class="fa-solid fa-ticket mr-1"></i> Meus ingressos
+                </button>
             </div>
 
             <div class="p-6 overflow-y-auto flex-grow space-y-6">
@@ -948,7 +969,73 @@
 
                 <div id="profile-orders-panel" class="hidden space-y-3">
                 </div>
+
+                <div id="profile-tickets-panel" class="hidden space-y-3">
+                </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ============ BILHETERIA (assets/js/eventos.js) ============ -->
+    <!-- Pagina do evento -->
+    <div id="event-modal" data-lenis-prevent class="ev-overlay fixed inset-0 z-[95] hidden items-center justify-center p-0 md:p-6 bg-[#050b07]/85 backdrop-blur-md">
+        <div class="fz-panel w-full max-w-5xl h-full md:h-auto md:max-h-[94vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="Evento">
+            <div id="event-modal-body"></div>
+        </div>
+    </div>
+
+    <!-- PIX do ingresso -->
+    <div id="ticket-pix-modal" data-lenis-prevent class="ev-overlay fixed inset-0 z-[96] hidden items-center justify-center p-3 md:p-6 bg-[#050b07]/90 backdrop-blur-md">
+        <div class="fz-panel w-full max-w-md max-h-[94vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="ticket-pix-title">
+            <div class="px-6 py-5 flex justify-between items-start border-b border-ash">
+                <div>
+                    <span class="label text-smoke"><i class="fa-brands fa-pix text-neon mr-1"></i> PIX • Mercado Pago</span>
+                    <h2 id="ticket-pix-title" class="font-sport text-4xl font-black uppercase leading-none mt-1">Pague em até <span class="text-neon">10 min</span></h2>
+                </div>
+                <button type="button" data-ev-close="ticket-pix-modal" aria-label="Fechar" class="fz-close shrink-0"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="ticket-pix-body" class="p-6 space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- Ingresso (QR Codes, transferencia, PDF) -->
+    <div id="ticket-modal" data-lenis-prevent class="ev-overlay fixed inset-0 z-[125] hidden items-center justify-center p-3 md:p-6 bg-[#050b07]/90 backdrop-blur-md">
+        <div class="fz-panel w-full max-w-md max-h-[94vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="Ingresso">
+            <div id="ticket-modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Receber ingresso transferido -->
+    <div id="transfer-accept-modal" data-lenis-prevent class="ev-overlay fixed inset-0 z-[98] hidden items-center justify-center p-3 md:p-6 bg-[#050b07]/90 backdrop-blur-md">
+        <div class="fz-panel w-full max-w-md max-h-[94vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="transfer-accept-title">
+            <div class="relative p-8 text-center bg-furiozo-dark overflow-hidden">
+                <div class="absolute inset-0 hatch pointer-events-none"></div>
+                <button type="button" data-ev-close="transfer-accept-modal" aria-label="Fechar" class="absolute top-4 right-4 fz-close z-10"><i class="fa-solid fa-xmark"></i></button>
+                <div class="relative w-16 h-16 bg-neon text-ink flex items-center justify-center text-3xl mx-auto mb-4"><i class="fa-solid fa-ticket"></i></div>
+                <span class="relative label text-neon">Transferência de ingresso</span>
+                <h2 id="transfer-accept-title" class="relative font-sport text-4xl font-black uppercase leading-none mt-2">Você recebeu um <span class="text-neon">ingresso</span></h2>
+            </div>
+            <form id="transfer-accept-form" class="p-6 space-y-4">
+                <p class="text-sm text-bone/80 leading-relaxed">Para o ingresso ficar no seu nome, confirme seus dados. O QR Code antigo deixa de valer e um novo é gerado só para você.</p>
+                <div>
+                    <label for="transfer-name" class="fz-label">Nome completo</label>
+                    <input type="text" id="transfer-name" required minlength="3" maxlength="80" class="fz-input">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="transfer-cpf" class="fz-label">CPF</label>
+                        <input type="text" id="transfer-cpf" required inputmode="numeric" maxlength="14" placeholder="000.000.000-00" class="fz-input font-mono">
+                    </div>
+                    <div>
+                        <label for="transfer-matricula" class="fz-label">Matrícula UERJ (opcional)</label>
+                        <input type="text" id="transfer-matricula" inputmode="numeric" maxlength="12" class="fz-input font-mono">
+                    </div>
+                </div>
+                <p id="transfer-accept-error" class="hidden text-sm text-red-300 border border-red-400/40 bg-red-400/10 px-3 py-2"></p>
+                <button type="submit" id="btn-transfer-accept" class="btn-razor btn-razor--solid w-full !text-base">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i> Assumir ingresso</span><span class="arrow">→</span>
+                </button>
+            </form>
         </div>
     </div>
 
@@ -1201,5 +1288,6 @@
 
     <!-- Script Principal -->
     <script type="module" src="assets/js/main.js"></script>
+    <script type="module" src="assets/js/eventos.js"></script>
 </body>
 </html>

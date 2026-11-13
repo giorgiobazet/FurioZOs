@@ -352,6 +352,21 @@ select.fz-input option { background: var(--coal); color: var(--bone); }
 .soon-tape { position: absolute; left: -10%; right: -10%; bottom: 20%; background: var(--neon); transform: rotate(-4deg); overflow: hidden; white-space: nowrap; padding: .45rem 0; }
 .soon-tape-track { display: inline-block; animation: marquee 9s linear infinite; font-family: 'Big Shoulders Stencil Display', 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 1.35rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
 
+/* ───────────────────────── Bilheteria (eventos.js) ───────────────────────── */
+.ev-bar { height: 8px; background: var(--ash); overflow: hidden; }
+.ev-bar > span { display: block; height: 100%; background: var(--neon); transition: width .6s var(--ease-razor); }
+.ev-bar--thin { height: 3px; }
+.ev-opt {
+    display: flex; flex-direction: column; gap: .35rem; text-align: left;
+    padding: .9rem 1rem; border: 1px solid var(--ash); background: rgba(5, 11, 7, 0.4);
+    transition: border-color .25s, background-color .25s;
+}
+.ev-opt:hover { border-color: rgba(204, 255, 0, 0.5); }
+.ev-opt.is-active { border-color: var(--neon); background: rgba(204, 255, 0, 0.06); box-shadow: inset 3px 0 0 var(--neon); }
+.ev-qr { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.ev-clover-static { margin-top: 0; }
+.ev-clover-static path { animation: none; stroke-dashoffset: 0; }
+
 @keyframes soon-draw { 0% { stroke-dashoffset: 420; } 55%, 75% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -420; } }
 
 /* ───────────────────────── Hero ───────────────────────── */

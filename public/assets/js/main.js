@@ -1511,23 +1511,19 @@ function openProfileModal() {
 }
 
 window.switchProfileTab = function (tab) {
-    const btnData = byId("tab-profile-data");
-    const btnOrders = byId("tab-profile-orders");
-    const formPanel = byId("profile-form");
-    const ordersPanel = byId("profile-orders-panel");
-
-    if (tab === "dados") {
-        if (btnData) btnData.classList.add("is-active");
-        if (btnOrders) btnOrders.classList.remove("is-active");
-        if (formPanel) formPanel.classList.remove("hidden");
-        if (ordersPanel) ordersPanel.classList.add("hidden");
-    } else {
-        if (btnOrders) btnOrders.classList.add("is-active");
-        if (btnData) btnData.classList.remove("is-active");
-        if (formPanel) formPanel.classList.add("hidden");
-        if (ordersPanel) ordersPanel.classList.remove("hidden");
-        renderUserOrdersHistory();
-    }
+    const tabs = {
+        dados: { btn: byId("tab-profile-data"), panel: byId("profile-form") },
+        pedidos: { btn: byId("tab-profile-orders"), panel: byId("profile-orders-panel") },
+        ingressos: { btn: byId("tab-profile-tickets"), panel: byId("profile-tickets-panel") }
+    };
+    const active = tabs[tab] ? tab : "dados";
+    Object.keys(tabs).forEach(function (key) {
+        const t = tabs[key];
+        if (t.btn) t.btn.classList.toggle("is-active", key === active);
+        if (t.panel) t.panel.classList.toggle("hidden", key !== active);
+    });
+    if (active === "pedidos") renderUserOrdersHistory();
+    if (active === "ingressos") document.dispatchEvent(new CustomEvent("fz:wallet-open"));
 };
 
 function renderUserOrdersHistory() {
@@ -2653,6 +2649,7 @@ async function bootstrapApp() {
                 userProfile = { name: "", matricula: "", cpf: "", phone: "" };
             }
             updateAuthUI();
+            document.dispatchEvent(new CustomEvent("fz:auth"));
             await loadCartData();
             await loadInitialData();
         });
@@ -2660,5 +2657,33 @@ async function bootstrapApp() {
         await loadInitialData();
     }
 }
+
+// Ponte para o modulo de eventos (assets/js/eventos.js): expoe so o que ele
+// precisa reaproveitar da loja, sem duplicar login, mascaras e chamadas ao Worker.
+window.FZ = {
+    appId: appId,
+    workerUrl: MERCADO_PAGO_CONFIG.workerUrl,
+    get auth() { return auth; },
+    get db() { return db; },
+    get user() { return isRegisteredUser() ? currentUser : null; },
+    get profile() { return userProfile; },
+    get isAdmin() { return isCurrentUserAdmin(); },
+    callWorker: callWorker,
+    showToast: showToast,
+    esc: esc,
+    formatPrice: formatPrice,
+    isValidCpf: isValidCpf,
+    maskCPF: maskCPF,
+    maskPhone: maskPhone,
+    maskMatricula: maskMatricula,
+    findProduct: findProduct,
+    isEmailVerified: isEmailVerified,
+    openVerifyModal: openVerifyModal,
+    openAuthModal: openAuthModal,
+    openProfileTab: function (tab) {
+        openProfileModal();
+        if (isRegisteredUser()) window.switchProfileTab(tab);
+    }
+};
 
 bootstrapApp();
