@@ -22,6 +22,7 @@
  *   POST /api/tickets/transfer         -> transferencia (offer | accept | cancel)
  *   GET  /api/events/:eventId/portaria-key -> chave do evento para a portaria offline
  *   POST /api/events/courtesy          -> cortesias/VIP (so diretoria)
+ *   POST /api/admin/roles              -> cadastra equipe da portaria / socio (so diretoria)
  *   cron (a cada 2 min)                -> devolve ao lote as reservas vencidas
  *
  * Variaveis (wrangler.toml ou painel): FIREBASE_PROJECT_ID, APP_ID, ALLOWED_ORIGINS,
@@ -130,6 +131,9 @@ export default {
             }
             if (url.pathname === "/api/events/courtesy" && request.method === "POST") {
                 return json(await handleCourtesy(request, env), 200, cors);
+            }
+            if (url.pathname === "/api/admin/roles" && request.method === "POST") {
+                return json(await handleAdminRole(request, env), 200, cors);
             }
             const keyMatch = url.pathname.match(/^\/api\/events\/([a-z0-9][a-z0-9-]{1,60})\/portaria-key$/);
             if (keyMatch && request.method === "GET") {
@@ -754,16 +758,20 @@ async function verifyFirebaseIdToken(token, projectId) {
 // ============================================================================
 // FIRESTORE VIA REST (conta de servico; ignora as regras do cliente)
 // ============================================================================
-let googleTokenCache = null;
+const googleTokenCache = {};
+const SCOPE_DATASTORE = "https://www.googleapis.com/auth/datastore";
+const SCOPE_IDENTITY = "https://www.googleapis.com/auth/identitytoolkit";
 
-async function getGoogleAccessToken(env) {
+async function getGoogleAccessToken(env, scope) {
+    scope = scope || SCOPE_DATASTORE;
     const now = Math.floor(Date.now() / 1000);
-    if (googleTokenCache && googleTokenCache.exp - 120 > now) return googleTokenCache.token;
+    const cached = googleTokenCache[scope];
+    if (cached && cached.exp - 120 > now) return cached.token;
 
     const header = b64urlJson({ alg: "RS256", typ: "JWT" });
     const claims = b64urlJson({
         iss: env.GCP_SA_CLIENT_EMAIL,
-        scope: "https://www.googleapis.com/auth/datastore",
+        scope: scope,
         aud: GOOGLE_TOKEN_URL,
         iat: now,
         exp: now + 3600
@@ -780,7 +788,7 @@ async function getGoogleAccessToken(env) {
     });
     if (!res.ok) throw new Error("Falha ao autenticar a conta de serviço: " + (await res.text()));
     const data = await res.json();
-    googleTokenCache = { token: data.access_token, exp: now + Number(data.expires_in || 3600) };
+    googleTokenCache[scope] = { token: data.access_token, exp: now + Number(data.expires_in || 3600) };
     return data.access_token;
 }
 
@@ -1907,4 +1915,58 @@ async function handleCourtesy(request, env) {
 
     if (!(await fsCommit(env, writes))) throw new HttpError(409, "Não foi possível emitir agora. Tente de novo.");
     return { eventId: eventId, tickets: out };
+}
+
+// ============================================================================
+// EQUIPE DA PORTARIA E SOCIOS (so diretoria)
+// A diretoria informa o e-mail da conta (ou o codigo/UID). O Worker acha a
+// conta no Firebase Auth e grava o cadastro; remover e listar e pelo painel.
+// ============================================================================
+async function lookupAccount(env, query) {
+    const token = await getGoogleAccessToken(env, SCOPE_IDENTITY);
+    const res = await fetch("https://identitytoolkit.googleapis.com/v1/projects/" + env.FIREBASE_PROJECT_ID + "/accounts:lookup", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(query)
+    });
+    if (!res.ok) throw new Error("Auth lookup " + res.status + ": " + (await res.text()).slice(0, 300));
+    const data = await res.json();
+    const u = data && Array.isArray(data.users) ? data.users[0] : null;
+    return u ? { uid: String(u.localId), email: String(u.email || ""), name: String(u.displayName || "") } : null;
+}
+
+async function handleAdminRole(request, env) {
+    const user = await requireUser(request, env);
+    if (!(await isAdminUser(env, user.sub))) throw new HttpError(403, "Acesso restrito à diretoria.");
+
+    const body = await readJson(request);
+    const role = body.role === "member" ? "members" : (body.role === "staff" ? "staff" : "");
+    if (!role) throw new HttpError(400, "Tipo de cadastro inválido.");
+    const identifier = String(body.identifier || "").trim();
+    const isEmail = /^[^\s@]{1,64}@[^\s@]{1,190}$/.test(identifier);
+    const isUid = /^[A-Za-z0-9]{20,40}$/.test(identifier);
+    if (!isEmail && !isUid) throw new HttpError(400, "Informe o e-mail da conta (ou o código da conta).");
+
+    let account = null;
+    try {
+        account = await lookupAccount(env, isEmail ? { email: [identifier.toLowerCase()] } : { localId: [identifier] });
+    } catch (e) {
+        console.error("lookup:", e && e.message ? e.message : e);
+        // Sem permissao de consulta no Firebase Auth: com o codigo da conta ainda da para cadastrar
+        if (!isUid) throw new HttpError(501, "Não consegui procurar por e-mail. Peça à pessoa o código da conta (aparece na tela da portaria) e cadastre por ele.");
+        account = { uid: identifier, email: "", name: "" };
+    }
+    if (!account) throw new HttpError(404, "Nenhuma conta do site usa esse e-mail. A pessoa precisa se cadastrar primeiro.");
+
+    const data = {
+        name: sanitizeText(body.name || account.name || "", 120),
+        email: sanitizeText(account.email, 200),
+        addedBy: user.sub,
+        addedAt: new Date()
+    };
+    if (role === "members") data.matricula = String(body.matricula || "").replace(/\D/g, "").slice(0, 12);
+
+    const path = "artifacts/" + appIdOf(env) + "/" + role + "/" + account.uid;
+    if (!(await fsCommit(env, [wUpdate(env, path, data, {})]))) throw new HttpError(409, "Não foi possível salvar agora. Tente de novo.");
+    return { role: body.role, uid: account.uid, email: data.email, name: data.name };
 }

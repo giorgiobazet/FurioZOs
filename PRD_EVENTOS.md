@@ -135,6 +135,7 @@ Tudo fica sob o mesmo namespace da loja, para reaproveitar regras e convenções
 | `POST /api/tickets/transfer` | titular / recebedor | `action: offer \| cancel \| accept` |
 | `GET /api/events/{eventId}/portaria-key` | admin/staff | Chave do evento para validar offline |
 | `POST /api/events/courtesy` | admin | Emite cortesias já com código de repasse |
+| `POST /api/admin/roles` | admin | Cadastra equipe da portaria / sócio pelo e-mail da conta (ou UID) |
 | cron `*/2 * * * *` | — | Devolve ao lote reservas vencidas |
 
 ### A.5. Regras de negócio detalhadas
@@ -148,3 +149,9 @@ Tudo fica sob o mesmo namespace da loja, para reaproveitar regras e convenções
 ### A.6. Testes
 
 `node worker/test/eventos.test.mjs` roda o Worker inteiro contra um Firestore e um Mercado Pago simulados em memória (loja + bilheteria).
+
+### A.7. Telas
+
+- **Site (`/`)**: seção "Nossas Festas" (só com evento publicado), página do evento em `/?evento={id}`, PIX com timer e aba "Meus ingressos" no perfil — `public/assets/js/eventos.js`. Link de transferência: `/#transferir={código}`.
+- **Painel da diretoria (`/admin/eventos`)**: `public/admin/eventos.html` + `public/assets/js/admin-eventos.js`. Abas por evento: Painel (KPIs, break-even, portaria ao vivo, virada de lote, custos), Dados, Lotes, Cortesias, Vendas (com exportação CSV); e aba geral Equipe e sócios.
+- **Break-even:** receita líquida = soma dos pedidos pagos − taxa do PIX (padrão 0,99%, ajustável por evento e guardada em `private/finance.feePercent`), comparada à soma de `private/finance.costs`.

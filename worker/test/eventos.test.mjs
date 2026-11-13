@@ -180,6 +180,13 @@ globalThis.fetch = async function (url, init) {
     if (url.startsWith("https://firestore.googleapis.com/")) return fakeFirestore(url, init);
     if (url.startsWith("https://api.mercadopago.com")) return fakeMp(url, init);
     if (url.includes("securetoken@system.gserviceaccount.com")) return new Response(JSON.stringify({ keys: [jwk] }), { status: 200, headers: { "Cache-Control": "max-age=3600" } });
+    if (url.startsWith("https://identitytoolkit.googleapis.com/")) {
+        if (globalThis.__lookupDown) return new Response("{}", { status: 403 });
+        const q = JSON.parse(init.body);
+        const users = (q.email && q.email[0] === "porteiro@teste.com") || (q.localId && q.localId[0] === "uidPorteiro0000000000000001")
+            ? [{ localId: "uidPorteiro0000000000000001", email: "porteiro@teste.com", displayName: "Porteiro Um" }] : [];
+        return new Response(JSON.stringify({ users }), { status: 200 });
+    }
     if (url.startsWith("https://oauth2.googleapis.com/token")) return new Response(JSON.stringify({ access_token: "fake", expires_in: 3600 }), { status: 200 });
     throw new Error("fetch inesperado: " + url);
 };
@@ -487,6 +494,23 @@ await test("cortesia só pela diretoria, já com código para o convidado", asyn
     assert.equal(await verifyToken(t.qrSignature, portariaKey), true);
     const acc = await call("POST", "/api/tickets/transfer", "dj", { action: "accept", code: r.data.tickets[0].code, customer });
     assert.equal(acc.status, 200, JSON.stringify(acc.data));
+});
+
+await test("diretoria cadastra equipe e sócio por e-mail; sem consulta, só pelo código", async () => {
+    assert.equal((await call("POST", "/api/admin/roles", "u1", { role: "staff", identifier: "porteiro@teste.com" })).status, 403);
+    const r = await call("POST", "/api/admin/roles", "admin1", { role: "staff", identifier: "Porteiro@teste.com" });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.uid, "uidPorteiro0000000000000001");
+    assert.equal(read("artifacts/furiozos-app/staff/uidPorteiro0000000000000001").email, "porteiro@teste.com");
+    assert.equal((await call("GET", "/api/events/festa/portaria-key", "uidPorteiro0000000000000001")).status, 200);
+    assert.equal((await call("POST", "/api/admin/roles", "admin1", { role: "member", identifier: "ninguem@teste.com" })).status, 404);
+    assert.equal((await call("POST", "/api/admin/roles", "admin1", { role: "xx", identifier: "porteiro@teste.com" })).status, 400);
+    globalThis.__lookupDown = true;
+    assert.equal((await call("POST", "/api/admin/roles", "admin1", { role: "member", identifier: "porteiro@teste.com" })).status, 501);
+    const byUid = await call("POST", "/api/admin/roles", "admin1", { role: "member", identifier: "uidSocio00000000000000000002", name: "Sócia Dois", matricula: "202012345678" });
+    assert.equal(byUid.status, 200, JSON.stringify(byUid.data));
+    assert.equal(read("artifacts/furiozos-app/members/uidSocio00000000000000000002").matricula, "202012345678");
+    globalThis.__lookupDown = false;
 });
 
 await test("sem TICKET_SECRET_KEY a bilheteria recusa, e a loja segue funcionando", async () => {

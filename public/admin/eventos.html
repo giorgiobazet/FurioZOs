@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#050b07">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Painel da Diretoria • Eventos • FurioZOs</title>
+    <link rel="icon" href="/assets/img/logo-atletica.jpg">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Big+Shoulders+Stencil+Display:wght@800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body class="text-bone antialiased min-h-screen bg-ink">
+
+    <header class="sticky top-0 z-40 bg-ink/95 backdrop-blur border-b border-neon/30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+            <a href="/" class="flex items-center gap-3 min-w-0">
+                <span class="w-10 h-10 rounded-full overflow-hidden ring-2 ring-neon/70 shrink-0 bg-white">
+                    <img src="/assets/img/logo-atletica.jpg" alt="" class="w-full h-full object-cover scale-[1.22]">
+                </span>
+                <span class="min-w-0">
+                    <span class="label text-neon block">Painel da Diretoria</span>
+                    <span class="font-sport font-black uppercase text-xl leading-none block truncate">Eventos <span class="text-neon">&amp;</span> Bilheteria</span>
+                </span>
+            </a>
+            <div class="flex items-center gap-3 shrink-0">
+                <span id="adm-user" class="hidden sm:block label text-smoke normal-case tracking-normal truncate max-w-[14rem]"></span>
+                <a href="/" class="label border border-ash text-bone hover:border-neon hover:text-neon px-3 py-2 transition-colors">← Site</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <!-- Carregando -->
+        <div id="adm-loading" class="py-24 text-center label text-smoke"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Verificando acesso...</div>
+
+        <!-- Login -->
+        <div id="adm-login" class="hidden max-w-md mx-auto fz-panel">
+            <div class="p-8 text-center bg-furiozo-dark relative overflow-hidden">
+                <div class="absolute inset-0 hatch pointer-events-none"></div>
+                <span class="relative label text-neon">Área restrita</span>
+                <h1 class="relative font-sport text-4xl font-black uppercase leading-none mt-2">Entrar na <span class="text-neon">diretoria</span></h1>
+            </div>
+            <form id="adm-login-form" class="p-6 space-y-4">
+                <div><label for="adm-email" class="fz-label">E-mail</label><input type="email" id="adm-email" required autocomplete="username" class="fz-input"></div>
+                <div><label for="adm-pass" class="fz-label">Senha</label><input type="password" id="adm-pass" required autocomplete="current-password" class="fz-input"></div>
+                <p id="adm-login-error" class="hidden text-sm text-red-300 border border-red-400/40 bg-red-400/10 px-3 py-2"></p>
+                <button type="submit" class="btn-razor btn-razor--solid w-full"><span>Entrar</span><span class="arrow">→</span></button>
+            </form>
+        </div>
+
+        <!-- Sem permissao -->
+        <div id="adm-denied" class="hidden max-w-md mx-auto fz-panel p-8 text-center space-y-4">
+            <i class="fa-solid fa-lock text-4xl text-smoke"></i>
+            <h1 class="font-sport text-3xl font-black uppercase leading-none">Acesso só da diretoria</h1>
+            <p class="text-sm text-smoke">Esta conta não está na lista de administradores da atlética.</p>
+            <button type="button" id="adm-logout-denied" class="label border border-ash text-bone hover:border-neon hover:text-neon px-4 py-2 transition-colors">Sair e entrar com outra conta</button>
+        </div>
+
+        <!-- Painel -->
+        <div id="adm-app" class="hidden space-y-6">
+            <div class="flex border-b border-ash">
+                <button type="button" data-main-tab="eventos" class="seg-tab is-active !flex-none px-6"><i class="fa-solid fa-champagne-glasses mr-1"></i> Eventos</button>
+                <button type="button" data-main-tab="equipe" class="seg-tab !flex-none px-6"><i class="fa-solid fa-users-gear mr-1"></i> Equipe e sócios</button>
+            </div>
+
+            <section id="adm-tab-eventos" class="grid lg:grid-cols-[300px_1fr] gap-6 items-start">
+                <aside class="space-y-3">
+                    <button type="button" id="adm-new-event" class="btn-razor btn-razor--solid w-full !text-base"><span class="flex items-center gap-2"><i class="fa-solid fa-plus"></i> Novo evento</span><span class="arrow">→</span></button>
+                    <div id="adm-event-list" class="space-y-2"></div>
+                </aside>
+                <div id="adm-event-detail" class="min-w-0"></div>
+            </section>
+
+            <section id="adm-tab-equipe" class="hidden grid md:grid-cols-2 gap-6 items-start"></section>
+        </div>
+    </main>
+
+    <div id="toast-container"></div>
+    <script type="module" src="/assets/js/admin-eventos.js"></script>
+</body>
+</html>
